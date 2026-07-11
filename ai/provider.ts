@@ -44,9 +44,18 @@ export interface LLMProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
 
-// Provider ativo: o real quando AI_BASE_URL existe; senão o mock de demo.
+// Provider ativo: quando AI_BASE_URL existe, escolhe o adapter pelo tipo de
+// gateway (omni = Omni AI Gateway próprio; openai = contrato OpenAI-compat);
+// sem AI_BASE_URL, usa o mock de demonstração.
 export async function getProvider(): Promise<LLMProvider> {
-  if (process.env.AI_BASE_URL) return new OwnProvider();
+  if (process.env.AI_BASE_URL) {
+    const kind = process.env.AI_GATEWAY_KIND ?? "omni";
+    if (kind === "omni") {
+      const { OmniProvider } = await import("./omni");
+      return new OmniProvider();
+    }
+    return new OwnProvider();
+  }
   const { MockProvider } = await import("./mock");
   return new MockProvider();
 }

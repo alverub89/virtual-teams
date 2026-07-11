@@ -175,13 +175,14 @@ export async function seedIfEmpty(db: any) {
     { nome: "Frontend React padrão", descricao: "Design system da diretoria, telemetria e acessibilidade.", guardRails: ["Sem segredo no bundle", "CSP estrita", "Telemetria de erros obrigatória"] },
   ]);
 
+  // Modelos reais roteáveis pelo gateway (contrato OpenAI); ajustáveis no Console.
   await db.insert(s.modeloIaRota).values([
-    { tarefa: "arquitetura", nivel: "avancado", modelo: "modelo-avancado-v3", custoRelativo: 5 },
-    { tarefa: "prd", nivel: "avancado", modelo: "modelo-avancado-v3", custoRelativo: 5 },
-    { tarefa: "historias", nivel: "intermediario", modelo: "modelo-intermediario-v2", custoRelativo: 2 },
-    { tarefa: "resumo", nivel: "intermediario", modelo: "modelo-intermediario-v2", custoRelativo: 2 },
-    { tarefa: "classificacao", nivel: "leve", modelo: "modelo-leve-v2", custoRelativo: 0.5 },
-    { tarefa: "sync", nivel: "leve", modelo: "modelo-leve-v2", custoRelativo: 0.5 },
+    { tarefa: "arquitetura", nivel: "avancado", modelo: "gpt-4.1", custoRelativo: 5 },
+    { tarefa: "prd", nivel: "avancado", modelo: "gpt-4.1", custoRelativo: 5 },
+    { tarefa: "historias", nivel: "intermediario", modelo: "gpt-4o", custoRelativo: 2 },
+    { tarefa: "resumo", nivel: "intermediario", modelo: "gpt-4o", custoRelativo: 2 },
+    { tarefa: "classificacao", nivel: "leve", modelo: "gpt-4o-mini", custoRelativo: 0.5 },
+    { tarefa: "sync", nivel: "leve", modelo: "gpt-4o-mini", custoRelativo: 0.5 },
   ]);
 
   /* ---------- iniciativas + jornada ---------- */
