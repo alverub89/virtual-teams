@@ -51,10 +51,15 @@ export async function getProvider(): Promise<LLMProvider> {
   if (process.env.AI_BASE_URL) {
     const kind = process.env.AI_GATEWAY_KIND ?? "omni";
     if (kind === "omni") {
-      const { OmniProvider } = await import("./omni");
-      return new OmniProvider();
+      // Só usa o gateway real quando o token está configurado; sem ele, cai no
+      // mock para o app seguir funcionando até a chave ser provisionada.
+      if (process.env.OMNI_PRODUCT_KEY || process.env.AI_API_KEY) {
+        const { OmniProvider } = await import("./omni");
+        return new OmniProvider();
+      }
+    } else {
+      return new OwnProvider();
     }
-    return new OwnProvider();
   }
   const { MockProvider } = await import("./mock");
   return new MockProvider();
