@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { auth } from "./_mw/auth";
 import authRoutes from "./_routes/auth";
+import onboarding from "./_routes/onboarding";
 import iniciativas from "./_routes/iniciativas";
 import okrs from "./_routes/okrs";
 import capacidades from "./_routes/capacidades";
@@ -25,6 +26,7 @@ app.route("/auth", authRoutes); // públicas (config, demo, callback OAuth, logo
 app.use("*", auth); // tudo abaixo exige sessão
 
 app.get("/me", (c) => c.json(c.get("me")));
+app.route("/onboarding", onboarding);
 app.route("/iniciativas", iniciativas);
 app.route("/okrs", okrs);
 app.route("/capacidades", capacidades);

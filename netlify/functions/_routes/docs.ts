@@ -12,13 +12,10 @@ app.get("/", async (c) => {
   const escopo = c.req.query("escopo"); // squad|release_train|comunidade
   const squadId = c.req.query("squadId");
   const db = await getDb();
-  let docs = await db.select().from(s.documento).orderBy(desc(s.documento.criadoEm));
+  let docs = (await db.select().from(s.documento).orderBy(desc(s.documento.criadoEm))).filter(
+    (d: any) => d.squadId === (squadId ?? me.squadId)
+  );
   if (escopo) docs = docs.filter((d: any) => d.escopo === escopo);
-  else if (squadId) docs = docs.filter((d: any) => d.squadId === squadId);
-  else
-    docs = docs.filter(
-      (d: any) => d.squadId === me.squadId || d.escopo !== "squad"
-    );
   return c.json(docs.map(({ conteudo, ...resto }: any) => resto));
 });
 

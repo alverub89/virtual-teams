@@ -44,6 +44,7 @@ export const pessoa = aiWorkspace.table(
     id: uuid("id").primaryKey().defaultRandom(),
     nome: text("nome").notNull(),
     email: text("email").notNull(),
+    senhaHash: text("senha_hash"), // cadastro por email/senha (scrypt)
     githubLogin: text("github_login"),
     papel: text("papel").notNull(), // dev|pm|arquiteto|coordenador|gerente|diretor
     squadId: uuid("squad_id").references(() => squad.id),

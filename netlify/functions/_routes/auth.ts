@@ -1,17 +1,15 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { setCookie, deleteCookie } from "hono/cookie";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { signSession, sessionCookieName, cookieOpts } from "../_mw/auth";
 import { getDb, schema } from "../../../db/client";
+import { hashPassword, verifyPassword } from "../_lib/password";
 import type { Me, Papel, Escopo } from "../../../shared/types";
 
-// Login (docs/spec §6.1): GitHub OAuth quando configurado; modo demo
-// (personas do seed) quando não há OAuth — é como o produto roda localmente.
+// Autenticação real por email/senha (cadastro do próprio usuário).
 const app = new Hono();
-
-const demoDisponivel = () =>
-  process.env.DEMO_MODE === "1" || !process.env.GITHUB_OAUTH_CLIENT_ID;
 
 function escoposDoPapel(papel: Papel): Escopo[] {
   if (papel === "arquiteto") return ["squad", "release_train", "comunidade"];
@@ -20,10 +18,9 @@ function escoposDoPapel(papel: Papel): Escopo[] {
   return ["squad"];
 }
 
-async function meDaPessoa(p: typeof schema.pessoa.$inferSelect): Promise<Me> {
+async function meDaPessoa(db: any, p: typeof schema.pessoa.$inferSelect): Promise<Me> {
   let squadNome: string | null = null;
   if (p.squadId) {
-    const db = await getDb();
     const [sq] = await db.select().from(schema.squad).where(eq(schema.squad.id, p.squadId));
     squadNome = sq?.nome ?? null;
   }
@@ -38,8 +35,7 @@ async function meDaPessoa(p: typeof schema.pessoa.$inferSelect): Promise<Me> {
   };
 }
 
-async function criarSessao(c: any, me: Me) {
-  const db = await getDb();
+async function abrirSessao(c: any, db: any, me: Me) {
   await db.insert(schema.sessao).values({
     pessoaId: me.id,
     refreshToken: randomUUID(),
@@ -48,82 +44,53 @@ async function criarSessao(c: any, me: Me) {
   setCookie(c, sessionCookieName, await signSession(me), cookieOpts());
 }
 
-// Configuração pública da tela de login.
-app.get("/config", async (c) => {
-  const demo = demoDisponivel();
-  let personas: { id: string; nome: string; papel: string; squadNome: string | null }[] = [];
-  if (demo) {
-    const db = await getDb();
-    const pessoas = await db.select().from(schema.pessoa);
-    const squads = await db.select().from(schema.squad);
-    const nomeSquad = (id: string | null) => squads.find((s: any) => s.id === id)?.nome ?? null;
-    personas = pessoas.map((p: any) => ({
-      id: p.id,
-      nome: p.nome,
-      papel: p.papel,
-      squadNome: nomeSquad(p.squadId),
-    }));
-  }
-  return c.json({
-    demo,
-    githubClientId: process.env.GITHUB_OAUTH_CLIENT_ID ?? null,
-    personas,
-  });
+app.get("/config", (c) => c.json({ mode: "email", allowRegister: true }));
+
+const Registro = z.object({
+  nome: z.string().min(2).max(80),
+  email: z.string().email(),
+  senha: z.string().min(8).max(200),
 });
 
-// Modo demo: entra como uma persona do seed.
-app.post("/demo", async (c) => {
-  if (!demoDisponivel()) return c.json({ error: "modo demo desativado" }, 403);
-  const { pessoaId } = await c.req.json<{ pessoaId?: string }>();
-  if (!pessoaId) return c.json({ error: "pessoaId obrigatório" }, 400);
+app.post("/register", async (c) => {
+  const body = Registro.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos", detalhe: body.error.flatten() }, 400);
+  const { nome, email, senha } = body.data;
   const db = await getDb();
-  const [p] = await db.select().from(schema.pessoa).where(eq(schema.pessoa.id, pessoaId));
-  if (!p) return c.json({ error: "persona não encontrada" }, 404);
-  const me = await meDaPessoa(p);
-  await criarSessao(c, me);
-  return c.json({ me });
+
+  const [existe] = await db
+    .select()
+    .from(schema.pessoa)
+    .where(eq(schema.pessoa.email, email.toLowerCase()));
+  if (existe) return c.json({ error: "já existe uma conta com esse email" }, 409);
+
+  // O primeiro usuário do workspace nasce como PM (dono da própria squad
+  // após o onboarding). Sem squad ainda → o front leva ao onboarding.
+  const [p] = await db
+    .insert(schema.pessoa)
+    .values({ nome, email: email.toLowerCase(), senhaHash: hashPassword(senha), papel: "pm" })
+    .returning();
+
+  const me = await meDaPessoa(db, p);
+  await abrirSessao(c, db, me);
+  return c.json({ me }, 201);
 });
 
-app.post("/github/callback", async (c) => {
-  const { code } = await c.req.json<{ code?: string }>();
-  if (!code) return c.json({ error: "code ausente" }, 400);
+const Login = z.object({ email: z.string().email(), senha: z.string().min(1) });
 
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return c.json({ error: "OAuth GitHub não configurado" }, 501);
-
-  const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-  });
-  const { access_token } = (await tokenRes.json()) as { access_token?: string };
-  if (!access_token) return c.json({ error: "code inválido" }, 401);
-
-  const ghUser = (await (
-    await fetch("https://api.github.com/user", {
-      headers: { authorization: `Bearer ${access_token}`, "user-agent": "ai-workspace" },
-    })
-  ).json()) as { login: string; name?: string; email?: string };
-
-  const email = ghUser.email ?? `${ghUser.login}@users.noreply.github.com`;
+app.post("/login", async (c) => {
+  const body = Login.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
   const db = await getDb();
-  let [p] = await db.select().from(schema.pessoa).where(eq(schema.pessoa.email, email));
-  if (!p) {
-    // Pessoa nova entra como dev sem squad; papel/squad são geridos na plataforma.
-    [p] = await db
-      .insert(schema.pessoa)
-      .values({ nome: ghUser.name ?? ghUser.login, email, githubLogin: ghUser.login, papel: "dev" })
-      .returning();
-  } else if (!p.githubLogin) {
-    await db
-      .update(schema.pessoa)
-      .set({ githubLogin: ghUser.login })
-      .where(eq(schema.pessoa.id, p.id));
-  }
+  const [p] = await db
+    .select()
+    .from(schema.pessoa)
+    .where(eq(schema.pessoa.email, body.data.email.toLowerCase()));
+  if (!p || !p.senhaHash || !verifyPassword(body.data.senha, p.senhaHash))
+    return c.json({ error: "email ou senha inválidos" }, 401);
 
-  const me = await meDaPessoa(p);
-  await criarSessao(c, me);
+  const me = await meDaPessoa(db, p);
+  await abrirSessao(c, db, me);
   return c.json({ me });
 });
 

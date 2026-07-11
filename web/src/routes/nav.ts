@@ -19,8 +19,8 @@ export const SQUAD_NAV: NavSection[] = [
     items: [
       {
         path: "/comunidade",
-        label: "Meios de Pagamento",
-        title: "Comunidade Meios de Pagamento",
+        label: "Minha comunidade",
+        title: "Comunidade",
         description: "Estrutura, documentações, sistemas e base de conhecimento — consulta.",
         fase: "Fase 3",
       },

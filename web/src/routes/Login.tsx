@@ -1,75 +1,39 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, post } from "../lib/api";
-import { homeDoPapel, type Me, type Papel } from "../../../shared/types";
+import { post } from "../lib/api";
+import type { Me } from "../../../shared/types";
 
-interface AuthConfig {
-  demo: boolean;
-  githubClientId: string | null;
-  personas: { id: string; nome: string; papel: string; squadNome: string | null }[];
-}
-
-const PAPEL_LABEL: Record<string, string> = {
-  pm: "Product Manager",
-  dev: "Desenvolvedor(a)",
-  arquiteto: "Arquitetura de Plataforma",
-  diretor: "Diretor de Tecnologia",
-  gerente: "Gerência",
-  coordenador: "Coordenação",
-};
-
-const iniciais = (nome: string) =>
-  nome.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+type Modo = "entrar" | "criar";
 
 export default function Login() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [config, setConfig] = useState<AuthConfig | null>(null);
-  const [entrando, setEntrando] = useState<string | null>(null);
+  const [modo, setModo] = useState<Modo>("criar");
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(false);
 
-  useEffect(() => {
-    api<AuthConfig>("/auth/config").then(setConfig).catch(() => setErro("API indisponível"));
-  }, []);
-
-  // Callback OAuth: GitHub redireciona de volta com ?code=
-  useEffect(() => {
-    const code = new URLSearchParams(location.search).get("code");
-    if (!code) return;
-    setEntrando("github");
-    post<{ me: Me }>("/auth/github/callback", { code })
-      .then(({ me }) => {
-        qc.setQueryData(["me"], me);
-        navigate(homeDoPapel(me.papel), { replace: true });
-      })
-      .catch((e) => {
-        setErro(String(e.message));
-        setEntrando(null);
-      });
-  }, []);
-
-  const entrarDemo = async (pessoaId: string) => {
-    setEntrando(pessoaId);
+  const enviar = async () => {
+    setErro(null);
+    setCarregando(true);
     try {
-      const { me } = await post<{ me: Me }>("/auth/demo", { pessoaId });
+      const rota = modo === "criar" ? "/auth/register" : "/auth/login";
+      const payload = modo === "criar" ? { nome, email, senha } : { email, senha };
+      const { me } = await post<{ me: Me }>(rota, payload);
       qc.setQueryData(["me"], me);
-      navigate(homeDoPapel(me.papel as Papel), { replace: true });
+      navigate(me.squadId ? "/squad/iniciativas" : "/onboarding", { replace: true });
     } catch (e) {
-      setErro(String((e as Error).message));
-      setEntrando(null);
+      setErro((e as Error).message);
+    } finally {
+      setCarregando(false);
     }
   };
 
-  const entrarGithub = () => {
-    if (!config?.githubClientId) return;
-    const params = new URLSearchParams({
-      client_id: config.githubClientId,
-      scope: "read:user read:org",
-      redirect_uri: `${location.origin}/login`,
-    });
-    location.href = `https://github.com/login/oauth/authorize?${params}`;
-  };
+  const podeEnviar =
+    email.includes("@") && senha.length >= (modo === "criar" ? 8 : 1) && (modo === "entrar" || nome.length >= 2);
 
   return (
     <div className="screen-login">
@@ -77,49 +41,64 @@ export default function Login() {
         <div className="login-card">
           <div className="login-logo">AI</div>
           <h1>AI Workspace</h1>
-          <p className="l-sub">A plataforma AI-First da diretoria. Entre com sua conta corporativa.</p>
+          <p className="l-sub">
+            {modo === "criar"
+              ? "Crie sua conta e monte seu workspace do zero."
+              : "Bem-vindo de volta. Entre para continuar."}
+          </p>
 
-          {config?.githubClientId && (
-            <button className="btn-gh" onClick={entrarGithub}>
-              Entrar com GitHub
+          <div className="auth-tabs">
+            <button className={modo === "criar" ? "active" : ""} onClick={() => setModo("criar")}>
+              Criar conta
             </button>
-          )}
+            <button className={modo === "entrar" ? "active" : ""} onClick={() => setModo("entrar")}>
+              Entrar
+            </button>
+          </div>
 
-          {config?.demo && (
-            <>
-              <div className="login-div">modo demonstração · entre como</div>
-              {config.personas.map((p) => (
-                <button
-                  key={p.id}
-                  className="btn-sso"
-                  disabled={entrando !== null}
-                  onClick={() => entrarDemo(p.id)}
-                  style={{ justifyContent: "flex-start", gap: 11 }}
-                >
-                  <span className="avatar" style={{ background: "#b85700" }}>
-                    {iniciais(p.nome)}
-                  </span>
-                  <span style={{ textAlign: "left" }}>
-                    {entrando === p.id ? "Entrando…" : p.nome}
-                    <small style={{ display: "block", fontWeight: 400, color: "var(--ink-3)" }}>
-                      {PAPEL_LABEL[p.papel] ?? p.papel}
-                      {p.squadNome ? ` · ${p.squadNome}` : ""}
-                    </small>
-                  </span>
-                </button>
-              ))}
-            </>
-          )}
+          <div style={{ textAlign: "left", marginTop: 6 }}>
+            {modo === "criar" && (
+              <div className="fld">
+                <label>Seu nome</label>
+                <input className="in" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Como devemos te chamar" />
+              </div>
+            )}
+            <div className="fld">
+              <label>Email</label>
+              <input className="in" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@empresa.com" autoCapitalize="none" />
+            </div>
+            <div className="fld">
+              <label>Senha {modo === "criar" && <small>(mín. 8 caracteres)</small>}</label>
+              <input
+                className="in"
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && podeEnviar && enviar()}
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
 
           {erro && <p className="login-note" style={{ color: "var(--crit)" }}>{erro}</p>}
-          {!config && !erro && <p className="login-note">Carregando…</p>}
+
+          <button
+            className="btn primary"
+            style={{ width: "100%", justifyContent: "center", marginTop: 8, padding: "11px" }}
+            disabled={!podeEnviar || carregando}
+            onClick={enviar}
+          >
+            {carregando ? "…" : modo === "criar" ? "Criar conta e começar" : "Entrar"}
+          </button>
+
           <p className="login-note">
-            Sem OAuth configurado, o AI Workspace roda em <b>modo demonstração</b> com banco
-            embarcado e dados ilustrativos — nenhuma integração externa é chamada.
+            {modo === "criar"
+              ? "Ao criar a conta você define sua área e squad no próximo passo, com os agentes já prontos para trabalhar."
+              : "Ainda não tem conta? Toque em “Criar conta”."}
           </p>
         </div>
       </div>
-      <div className="login-foot">AI Workspace · ambiente interno</div>
+      <div className="login-foot">AI Workspace · plataforma AI-First de produto</div>
     </div>
   );
 }

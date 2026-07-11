@@ -88,6 +88,16 @@ main { flex: 1; overflow-y: auto; min-width: 0; }
 .login-div::before, .login-div::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .login-note { font-size: 11.5px; color: var(--ink-3); margin-top: 18px; line-height: 1.5; }
 .login-foot { text-align: center; color: rgba(255, 255, 255, 0.8); font-size: 11.5px; padding: 16px; }
+.auth-tabs { display: flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin: 18px 0 4px; }
+.auth-tabs button { flex: 1; padding: 8px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.auth-tabs button.active { background: var(--surface); color: var(--accent-deep); box-shadow: var(--shadow); }
+
+/* onboarding */
+.onb-card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 18px 50px rgba(122, 57, 0, 0.28); text-align: left; color: var(--ink); margin-top: 30px; }
+.onb-step { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #b85700; font-weight: 700; }
+.onb-card h3 { font-size: 19px; margin: 8px 0 4px; color: #1f1d1a; }
+.onb-help { font-size: 13px; color: #52514e; margin-bottom: 14px; }
+.onb-btn { width: 100%; justify-content: center; padding: 11px; margin-top: 14px; }
 
 /* entrada / seletor de visão */
 .screen-entry { display: flex; min-height: 100vh; flex-direction: column; background: linear-gradient(165deg, #ff8a00 0%, #ec7000 45%, #c25a00 100%); color: #fff; }

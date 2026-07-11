@@ -1,0 +1,1 @@
+ALTER TABLE "ai_workspace"."pessoa" ADD COLUMN "senha_hash" text;

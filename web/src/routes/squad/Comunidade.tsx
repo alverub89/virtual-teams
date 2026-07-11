@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { Chip, PageHead } from "../../components/ui";
 
 interface Estrutura {
-  comunidade: { nome: string };
+  comunidade: { nome: string } | null;
   releaseTrains: {
     id: string;
     nome: string;
@@ -17,8 +17,8 @@ export default function Comunidade() {
   return (
     <>
       <PageHead
-        title={`Comunidade ${data?.comunidade.nome ?? ""}`}
-        description="A estrutura da diretoria — release trains e squads. Você cria e edita na sua squad; o resto é consulta."
+        title={data?.comunidade ? `Comunidade ${data.comunidade.nome}` : "Comunidade"}
+        description="A estrutura da sua área — release trains e squads. Você cria e edita na sua squad; o resto é consulta."
       />
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", alignItems: "start" }}>
         {data?.releaseTrains.map((rt) => (

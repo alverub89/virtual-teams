@@ -7,11 +7,14 @@ import { audit } from "../_lib/audit";
 
 const app = new Hono();
 
-/* Base de conhecimento: artigos por escopo com endossos. */
+/* Base de conhecimento da squad do usuário, por escopo, com endossos. */
 app.get("/", async (c) => {
+  const me = c.get("me");
   const escopo = c.req.query("escopo");
   const db = await getDb();
-  let artigos = await db.select().from(s.kbArtigo).orderBy(desc(s.kbArtigo.criadoEm));
+  let artigos = (await db.select().from(s.kbArtigo).orderBy(desc(s.kbArtigo.criadoEm))).filter(
+    (a: any) => a.squadId === me.squadId
+  );
   if (escopo) artigos = artigos.filter((a: any) => a.escopo === escopo);
   const endossos = await db.select().from(s.kbEndosso);
   return c.json(

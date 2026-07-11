@@ -7,10 +7,12 @@ import { audit } from "../_lib/audit";
 
 const app = new Hono();
 
-/* Cascata de OKRs: comunidade → RT → squad, com KRs, medições e features. */
+/* OKRs da squad do usuário, com KRs, medições e features. */
 app.get("/", async (c) => {
+  const me = c.get("me");
+  if (!me.squadId) return c.json([]);
   const db = await getDb();
-  const okrs = await db.select().from(s.okr);
+  const okrs = (await db.select().from(s.okr)).filter((o: any) => o.squadId === me.squadId);
   const krs = await db.select().from(s.keyResult).orderBy(asc(s.keyResult.ordem));
   const krIds = krs.map((k: any) => k.id);
   const medicoes = krIds.length
@@ -43,6 +45,56 @@ app.get("/", async (c) => {
         })),
     }))
   );
+});
+
+const NovoOkr = z.object({
+  objetivo: z.string().min(4).max(160),
+  trimestre: z.string().min(2).max(20),
+  krs: z
+    .array(
+      z.object({
+        descricao: z.string().min(3).max(160),
+        unidade: z.string().min(1).max(20).default("%"),
+        baseline: z.number().default(0),
+        meta: z.number(),
+        invertido: z.boolean().default(false),
+      })
+    )
+    .min(1)
+    .max(6),
+});
+
+// Cria um OKR da squad (objetivo + KRs). O usuário monta seus objetivos.
+app.post("/", rbac("imputar_kr"), async (c) => {
+  const me = c.get("me");
+  if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
+  const body = NovoOkr.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos", detalhe: body.error.flatten() }, 400);
+
+  const db = await getDb();
+  const [okr] = await db
+    .insert(s.okr)
+    .values({
+      escopo: "squad",
+      squadId: me.squadId,
+      objetivo: body.data.objetivo,
+      dono: me.nome,
+      trimestre: body.data.trimestre,
+    })
+    .returning();
+  await db.insert(s.keyResult).values(
+    body.data.krs.map((k, i) => ({
+      okrId: okr.id,
+      ordem: i + 1,
+      descricao: k.descricao,
+      unidade: k.unidade,
+      baseline: k.baseline,
+      meta: k.meta,
+      invertido: k.invertido,
+    }))
+  );
+  await audit(me, "criar_okr", `okr:${okr.objetivo}`);
+  return c.json(okr, 201);
 });
 
 const Medicao = z.object({

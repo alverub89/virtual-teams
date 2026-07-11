@@ -4,6 +4,7 @@ import { ToastProvider } from "./lib/toast";
 import { CONSOLE_NAV, GESTAO_NAV, SQUAD_NAV } from "./routes/nav";
 import Entry from "./routes/Entry";
 import Login from "./routes/Login";
+import Onboarding from "./routes/Onboarding";
 import RequireAuth from "./routes/RequireAuth";
 import Iniciativas from "./routes/squad/Iniciativas";
 import Jornada from "./routes/squad/Jornada";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
 
         <Route element={<RequireAuth />}>
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/" element={<Entry />} />
 
           <Route
