@@ -22,34 +22,51 @@ shared/               Tipos + schemas Zod compartilhados (web ↔ functions)
 docs/                 Spec + protótipo (referência viva)
 ```
 
-## Desenvolvimento
+## Rodar agora (modo demonstração — zero configuração)
 
 ```bash
 pnpm install
-cp .env.example .env          # preencha DATABASE_URL, SESSION_JWT_SECRET etc.
-pnpm dev                      # netlify dev (SPA + functions)
-# ou apenas o front:
-pnpm --filter web dev
+pnpm dev        # API em :8888 + SPA em :5173
 ```
 
-- `pnpm build` — build da SPA (o deploy na Netlify empacota as functions).
-- `pnpm typecheck` — checagem de tipos do backend e do front.
-- `pnpm db:generate` / `pnpm db:migrate` — migrations Drizzle (a migration
-  `0000_init` deve ser o `ai_workspace_schema.sql` canônico — ver `db/migrations/README.md`).
+Abra **http://localhost:5173** e entre como uma das personas (Ana Souza · PM,
+Bruno Lima · dev, Carlos Menezes · arquiteto, Rubens Alves · diretor). Sem
+`DATABASE_URL`, o produto sobe com **Postgres embarcado (PGlite)**, migrations e
+um **seed de demonstração** — e sem `AI_BASE_URL`, os agentes respondem por um
+**provedor simulado**. Nenhuma credencial é necessária para testar tudo.
 
-## Estado atual — Fase 0 (fundação)
+## Modo produção
 
-Feito nesta fase (roadmap na spec, seção 15):
+Preencha o `.env` (ver `.env.example`): `DATABASE_URL` (Neon pooled) troca o
+banco embarcado pelo Neon; `AI_BASE_URL`/`AI_API_KEY` trocam o mock pelo
+provedor de IA próprio; `GITHUB_OAUTH_CLIENT_ID/SECRET` habilitam o login real
+(o modo demo desliga sozinho, ou force com `DEMO_MODE=1`). O deploy é o site
+Netlify apontado para este repo — build da SPA + Functions já configurados.
 
-- Monorepo + `netlify.toml` (SPA fallback, headers de segurança, functions).
-- Design system extraído do protótipo (`web/src/styles/tokens.css` + shell).
-- SPA shell com as três visões (Squad / Console / Gestão), rotas da spec e
-  telas placeholder indicando a fase em que cada uma ganha dados reais.
-- API Hono catch-all em `/api/*` com sessão (cookie httpOnly + JWT), RBAC por
-  papel/escopo, callback OAuth GitHub e `/api/me`.
-- Camada Drizzle/Neon (HTTP para leituras, Pool para transações) com as
-  tabelas de fundação; adapter `LLMProvider` + roteador de modelos; esqueleto
-  da execução autônoma (background + sweeper agendado).
+- `pnpm build` — build da SPA · `pnpm typecheck` — tipos do back e do front.
+- `pnpm db:generate` / `pnpm db:migrate` — migrations Drizzle.
 
-Próximo: **Fase 1 — núcleo da squad** (iniciativas + jornada, capacidades/repos,
-OKRs, docs, chat de agente com streaming).
+## O que está implementado
+
+- **Squad**: iniciativas com jornada BMAD (stepper por etapa), **chat com o
+  agente de cada etapa via streaming SSE**, artefatos, histórias, OKRs em
+  cascata com planejado × realizado e associação de features, capacidades +
+  repositórios, estação dev, documentação com leitor, base de conhecimento com
+  escopo e endosso, esteira & GMUDs.
+- **Execução autônoma**: máquina de estados persistida (runs → passos →
+  checkpoints), motor `advanceRun` idempotente com orçamento de tempo e teto de
+  tokens, checkpoints humanos (aprovar/ajustar/rejeitar) que retomam o run,
+  sweeper agendado, timeline da squad virtual na UI.
+- **Console**: visão geral com trilha de auditoria, editor de agentes
+  (personalidade, skills, tools com permissão) com **prompt de sistema gerado**,
+  métodos, blueprints com guard-rails, MCPs, roteamento de modelos por tarefa e
+  consumo de tokens por squad com budget.
+- **Gestão**: indicadores (fluxo por etapa, lead time, GMUDs, custo de IA,
+  progresso de KRs) e documentações em consulta.
+- **Transversal**: RBAC por papel/escopo no servidor, sessão httpOnly+JWT,
+  auditoria de ações sensíveis, contabilização de tokens por squad/mês.
+
+Pendências para produção (detalhe em `docs/plano-de-implementacao.md`):
+provisionamento (Neon com o schema canônico, OAuth, provedor de IA), tools
+reais das integrações (GitHub App, IU Click, Atlan, ServiceNow), RLS, rate
+limiting e testes e2e contínuos.

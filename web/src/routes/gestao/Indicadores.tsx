@@ -1,0 +1,91 @@
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../lib/api";
+import { Chip, HBar, Kpi, PageHead } from "../../components/ui";
+
+interface Indicadores {
+  kpis: {
+    iniciativasAtivas: number;
+    leadTimeDias: number;
+    taxaSucessoGmud: number | null;
+    custoIaMes: number;
+    runsAutonomos: number;
+    squads: number;
+  };
+  fluxo: { etapa: string; iniciativas: number }[];
+  consumoPorSquad: { squad: string; tokens: number; custo: number }[];
+  gmuds90d: { numero: string; titulo: string; status: string; janela: string | null }[];
+  progressoKrs: { descricao: string; progresso: number }[];
+}
+
+export default function Indicadores() {
+  const { data } = useQuery<Indicadores>({ queryKey: ["indicadores"], queryFn: () => api("/gestao/indicadores") });
+
+  return (
+    <>
+      <PageHead
+        title="Indicadores"
+        description="O fluxo de produção da diretoria — da ideia ao deploy — com lead time, GMUDs e custo de IA."
+      />
+      <div className="grid g4" style={{ marginBottom: 14 }}>
+        <Kpi label="Iniciativas ativas" value={data?.kpis.iniciativasAtivas ?? "…"} delta={data ? `${data.kpis.squads} squads` : undefined} />
+        <Kpi label="Lead time — ideia ao deploy" value={data?.kpis.leadTimeDias ?? "…"} suffix="dias" delta="−8 dias vs. trimestre anterior" tone="up" />
+        <Kpi label="Sucesso de GMUD (90d)" value={data?.kpis.taxaSucessoGmud != null ? `${data.kpis.taxaSucessoGmud}%` : "…"} delta={data ? `${data.gmuds90d.length} mudanças` : undefined} />
+        <Kpi label="Custo de IA no mês" value={data ? `R$ ${data.kpis.custoIaMes.toFixed(0)}` : "…"} delta={data ? `${data.kpis.runsAutonomos} runs autônomos` : undefined} />
+      </div>
+
+      <div className="grid g2" style={{ alignItems: "start" }}>
+        <div className="card viz">
+          <h3>Fluxo de produção — iniciativas por etapa</h3>
+          <div className="sub">onde as features estão na jornada, agora</div>
+          <HBar rows={(data?.fluxo ?? []).map((f) => ({ label: f.etapa, value: f.iniciativas }))} />
+          <div className="axis-note">iniciativas em andamento por etapa do método</div>
+        </div>
+        <div className="card viz">
+          <h3>Consumo de IA por squad — mês atual</h3>
+          <div className="sub">tokens consumidos (todas as chamadas de agentes)</div>
+          <HBar
+            rows={(data?.consumoPorSquad ?? []).map((c) => ({ label: c.squad, value: c.tokens }))}
+            format={(v) => `${(v / 1e6).toFixed(2)}M`}
+          />
+          <div className="axis-note">controle fino no Console › MCPs & modelos</div>
+        </div>
+      </div>
+
+      <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
+        <div className="card viz">
+          <h3>Progresso dos KRs</h3>
+          <div className="sub">realizado mais recente vs. meta do trimestre</div>
+          {data?.progressoKrs.map((k) => (
+            <div key={k.descricao} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", fontSize: 12.5, marginBottom: 4, gap: 8 }}>
+                <span style={{ flex: 1 }}>{k.descricao}</span>
+                <b className="num">{k.progresso}%</b>
+              </div>
+              <div className="meter"><i style={{ width: `${k.progresso}%` }} /></div>
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-pad" style={{ paddingBottom: 0 }}>
+            <h3>GMUDs — últimos 90 dias</h3>
+          </div>
+          <table className="tbl">
+            <tbody>
+              {data?.gmuds90d.map((g) => (
+                <tr key={g.numero}>
+                  <td className="mono">{g.numero}</td>
+                  <td>{g.titulo}</td>
+                  <td>
+                    <Chip tone={g.status === "executada" ? "good" : g.status === "rollback" ? "crit" : g.status === "aguardando_aprovacao" ? "warn" : "neutral"}>
+                      {g.status.replace("_", " ")}
+                    </Chip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}

@@ -1,40 +1,51 @@
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { useMe } from "../lib/api";
+import { homeDoPapel } from "../../../shared/types";
 
-// Seletor de visão — aparece para quem tem acesso a mais de um contexto
-// (docs/spec, seção 4.1). Com RBAC real, o redirect por papel é automático.
-const VISOES = [
-  {
-    role: "Squad",
-    title: "Trabalhar na squad",
-    desc: "Iniciativas, jornada com agentes, OKRs, docs e execução autônoma.",
-    to: "/squad/iniciativas",
-  },
-  {
-    role: "Console",
-    title: "Configurar a plataforma",
-    desc: "Blueprints, esteiras, métodos, agentes & skills, MCPs e modelos.",
-    to: "/console",
-  },
-  {
-    role: "Gestão",
-    title: "Acompanhar resultados",
-    desc: "Indicadores da diretoria e documentações em modo consulta.",
-    to: "/gestao",
-  },
-];
-
+// Seletor de visão — só para quem tem acesso a mais de um contexto
+// (docs/spec §4.1); com um único contexto, redireciona direto.
 export default function Entry() {
   const navigate = useNavigate();
+  const { data: me } = useMe();
+
+  if (!me) return null;
+
+  const visoes = [
+    {
+      role: "Workspace da Squad",
+      title: "Construir produto com agentes",
+      desc: "Capacidades, jornada completa da iniciativa com um agente por etapa, OKRs e execução autônoma.",
+      to: "/squad/iniciativas",
+      pode: !!me.squadId || me.papel === "arquiteto",
+    },
+    {
+      role: "Console da Plataforma",
+      title: "Configurar como tudo funciona",
+      desc: "Blueprints, esteiras e GMUD, métodos, agentes & skills, MCPs, modelos e limites de custo.",
+      to: "/console",
+      pode: me.papel === "arquiteto",
+    },
+    {
+      role: "Visão de Gestão",
+      title: "Acompanhar indicadores",
+      desc: "Fluxo de produção, lead time, sucesso de GMUD e custo de IA — com as documentações em consulta.",
+      to: "/gestao",
+      pode: ["diretor", "gerente", "coordenador"].includes(me.papel),
+    },
+  ].filter((v) => v.pode);
+
+  if (visoes.length <= 1) return <Navigate to={homeDoPapel(me.papel)} replace />;
+
   return (
     <div className="screen-entry">
       <div className="entry-inner">
         <div className="entry-logo">AI</div>
         <h1>AI Workspace</h1>
         <p className="tag">
-          O ambiente <b>AI-First</b> de produto da diretoria — da ideia à produção.
+          Olá, <b>{me.nome}</b> — escolha a visão para continuar.
         </p>
         <div className="persona-grid">
-          {VISOES.map((v) => (
+          {visoes.map((v) => (
             <div key={v.to} className="persona-card" onClick={() => navigate(v.to)}>
               <span className="role">{v.role}</span>
               <h3>{v.title}</h3>
@@ -43,7 +54,7 @@ export default function Entry() {
           ))}
         </div>
       </div>
-      <div className="entry-foot">Escolha a visão para continuar</div>
+      <div className="entry-foot">AI Workspace · plataforma AI-First da diretoria</div>
     </div>
   );
 }

@@ -1,5 +1,10 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import type { NavSection } from "../routes/nav";
+import { post, useMe } from "../lib/api";
+
+const iniciais = (nome: string) =>
+  nome.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
 export default function AppShell({
   sections,
@@ -9,6 +14,15 @@ export default function AppShell({
   foot?: React.ReactNode;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { data: me } = useMe();
+
+  const sair = async () => {
+    await post("/auth/logout");
+    qc.clear();
+    navigate("/login");
+  };
+
   return (
     <div className="app">
       <div className="topbar">
@@ -17,12 +31,15 @@ export default function AppShell({
           AI Workspace <small>Plataforma AI-First de Produto</small>
         </div>
         <div className="spacer" />
-        <span className="env-chip">ambiente de desenvolvimento</span>
-        <button className="persona-chip" onClick={() => navigate("/")}>
+        {me?.squadNome && <span className="env-chip">{me.squadNome}</span>}
+        <button className="persona-chip" onClick={() => navigate("/")} title="Trocar de visão">
           <span className="avatar" style={{ background: "#b85700" }}>
-            ·
+            {me ? iniciais(me.nome) : "·"}
           </span>
-          Trocar de visão ▾
+          {me ? `${me.nome} · ${me.papel}` : "…"} ▾
+        </button>
+        <button className="env-chip" onClick={sair} style={{ cursor: "pointer" }}>
+          ⎋ Sair
         </button>
       </div>
       <div className="frame">

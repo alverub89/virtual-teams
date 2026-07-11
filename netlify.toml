@@ -7,6 +7,9 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  # PGlite (modo demo local) nunca roda em produção — DATABASE_URL sempre
+  # presente lá — mas precisa ficar fora do bundle esbuild (WASM).
+  external_node_modules = ["@electric-sql/pglite"]
 
 # API serverless (Hono catch-all) — a rota é declarada na própria função
 # via `export const config = { path: "/api/*" }` (Functions v2).

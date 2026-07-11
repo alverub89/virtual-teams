@@ -20,10 +20,49 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export const post = <T>(path: string, body?: unknown) =>
+  api<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) });
+export const put = <T>(path: string, body?: unknown) =>
+  api<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) });
+
 export function useMe() {
   return useQuery<Me, ApiError>({
     queryKey: ["me"],
     queryFn: () => api<Me>("/me"),
     retry: false,
+    staleTime: Infinity,
   });
+}
+
+/* Consome o SSE do chat (POST + ReadableStream). */
+export async function streamChat(
+  codigo: string,
+  etapa: number,
+  mensagem: string,
+  onDelta: (delta: string) => void
+): Promise<void> {
+  const res = await fetch(`/api/iniciativas/${codigo}/chat`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mensagem, etapa }),
+  });
+  if (!res.ok || !res.body) throw new ApiError(res.status, "falha no chat");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const eventos = buffer.split("\n\n");
+    buffer = eventos.pop() ?? "";
+    for (const ev of eventos) {
+      const payload = ev.replace(/^data: /, "").trim();
+      if (!payload) continue;
+      const data = JSON.parse(payload) as { delta?: string; error?: string };
+      if (data.error) throw new ApiError(500, data.error);
+      if (data.delta) onDelta(data.delta);
+    }
+  }
 }

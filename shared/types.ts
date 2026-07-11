@@ -35,6 +35,14 @@ export const Me = z.object({
   email: z.string().email(),
   papel: Papel,
   squadId: z.string().nullable(),
+  squadNome: z.string().nullable(),
   escopos: z.array(Escopo),
 });
 export type Me = z.infer<typeof Me>;
+
+// Destino inicial por papel (docs/spec §4.1).
+export function homeDoPapel(papel: Papel): string {
+  if (papel === "arquiteto") return "/console";
+  if (papel === "diretor" || papel === "gerente" || papel === "coordenador") return "/gestao";
+  return "/squad/iniciativas";
+}

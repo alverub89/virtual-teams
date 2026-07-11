@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["netlify/**/*.ts", "db/**/*.ts", "ai/**/*.ts", "integrations/**/*.ts", "shared/**/*.ts", "drizzle.config.ts"]
+  "include": ["netlify/**/*.ts", "db/**/*.ts", "ai/**/*.ts", "integrations/**/*.ts", "shared/**/*.ts", "scripts/**/*.ts", "drizzle.config.ts"]
 }

@@ -44,6 +44,13 @@ export interface LLMProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
 
+// Provider ativo: o real quando AI_BASE_URL existe; senão o mock de demo.
+export async function getProvider(): Promise<LLMProvider> {
+  if (process.env.AI_BASE_URL) return new OwnProvider();
+  const { MockProvider } = await import("./mock");
+  return new MockProvider();
+}
+
 export class OwnProvider implements LLMProvider {
   constructor(
     private baseUrl = process.env.AI_BASE_URL ?? "",

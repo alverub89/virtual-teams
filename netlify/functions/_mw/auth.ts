@@ -4,7 +4,15 @@ import { jwtVerify, SignJWT } from "jose";
 import type { Me } from "../../../shared/types";
 
 const SESSION_COOKIE = "aiw_session";
-const JWT_TTL = "15m";
+const JWT_TTL = "8h";
+
+export const cookieOpts = () => ({
+  httpOnly: true,
+  secure: !process.env.AIW_DEV, // localhost sem TLS no dev
+  sameSite: "Lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 8,
+});
 
 const secret = () => {
   const s = process.env.SESSION_JWT_SECRET;

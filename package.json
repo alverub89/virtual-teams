@@ -5,13 +5,15 @@
   "description": "AI Workspace — plataforma AI-First de produto (Netlify + Neon + provedor de IA próprio)",
   "type": "module",
   "scripts": {
-    "dev": "netlify dev",
+    "dev": "concurrently -n api,web -c yellow,cyan \"pnpm dev:api\" \"pnpm --filter web dev\"",
+    "dev:api": "tsx watch scripts/dev-api.ts",
     "build": "pnpm --filter web build",
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter web typecheck",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.2.15",
     "@neondatabase/serverless": "^0.10.4",
     "drizzle-orm": "^0.38.3",
     "hono": "^4.6.16",
@@ -19,9 +21,13 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@hono/node-server": "^1.13.7",
     "@netlify/functions": "^2.8.2",
     "@types/node": "^22.10.5",
+    "concurrently": "^9.1.2",
     "drizzle-kit": "^0.30.1",
+    "playwright-core": "^1.61.1",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }
