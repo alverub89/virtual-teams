@@ -16,6 +16,10 @@ import gestao from "./_routes/gestao";
 const app = new Hono().basePath("/api");
 
 app.get("/health", (c) => c.json({ ok: true, service: "ai-workspace" }));
+app.get("/health/db", async (c) => {
+  const { dbDiagnostics } = await import("../../db/client");
+  return c.json(await dbDiagnostics());
+});
 app.route("/auth", authRoutes); // públicas (config, demo, callback OAuth, logout)
 
 app.use("*", auth); // tudo abaixo exige sessão

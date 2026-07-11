@@ -1,22 +1,36 @@
 import * as schema from "./schema";
 
 // Cliente dual (docs/spec §3.3 + modo demo):
-// - Produção Netlify: NETLIFY_DATABASE_URL (Neon provisionado pela Netlify) ou
-//   DATABASE_URL — driver serverless HTTP. O schema é aplicado pela migration
-//   do Netlify DB no deploy; o seed roda na primeira conexão (idempotente).
+// - Produção Netlify: Netlify DB (Neon). A connection string vem de
+//   getConnectionString() do @netlify/database (accessor oficial em runtime)
+//   ou das envs NETLIFY_DATABASE_URL / DATABASE_URL. Driver serverless HTTP.
+//   Schema aplicado pela migration do Netlify DB no deploy; seed idempotente
+//   na primeira conexão.
 // - Local sem banco: PGlite (Postgres embarcado em WASM) com migrations +
-//   seed aplicados na primeira conexão. É o modo demo turnkey.
+//   seed. Modo demo turnkey.
 
 export type Db = ReturnType<typeof import("drizzle-orm/neon-http").drizzle<typeof schema>>;
 
-const neonUrl = () => process.env.NETLIFY_DATABASE_URL ?? process.env.DATABASE_URL;
-
 let clientPromise: Promise<any> | null = null;
 
-async function initNeon() {
+// Resolve a connection string do Postgres gerenciado (Neon/Netlify DB).
+export async function resolveNeonUrl(): Promise<{ url?: string; source: string }> {
+  if (process.env.NETLIFY_DATABASE_URL) return { url: process.env.NETLIFY_DATABASE_URL, source: "env:NETLIFY_DATABASE_URL" };
+  if (process.env.DATABASE_URL) return { url: process.env.DATABASE_URL, source: "env:DATABASE_URL" };
+  try {
+    const mod: any = await import("@netlify/database");
+    const cs = typeof mod.getConnectionString === "function" ? mod.getConnectionString() : undefined;
+    if (cs) return { url: cs, source: "getConnectionString" };
+  } catch {
+    /* pacote indisponível fora da Netlify — segue para PGlite */
+  }
+  return { source: "none" };
+}
+
+async function initNeon(url: string) {
   const { neon } = await import("@neondatabase/serverless");
   const { drizzle } = await import("drizzle-orm/neon-http");
-  const db = drizzle(neon(neonUrl()!), { schema });
+  const db = drizzle(neon(url), { schema });
   const { seedIfEmpty } = await import("./seed");
   await seedIfEmpty(db as any); // idempotente: só popula se o banco estiver vazio
   return db;
@@ -40,13 +54,39 @@ async function initPglite() {
   return db;
 }
 
+async function init() {
+  const { url } = await resolveNeonUrl();
+  return url ? initNeon(url) : initPglite();
+}
+
 export async function getDb(): Promise<any> {
   // Falha de init não fica cacheada — a próxima chamada tenta de novo.
-  clientPromise ??= (neonUrl() ? initNeon() : initPglite()).catch((err) => {
+  clientPromise ??= init().catch((err) => {
     clientPromise = null;
     throw err;
   });
   return clientPromise;
+}
+
+// Diagnóstico seguro (sem vazar a connection string) para depurar conexão.
+export async function dbDiagnostics(): Promise<Record<string, unknown>> {
+  const { url, source } = await resolveNeonUrl();
+  const out: Record<string, unknown> = {
+    hasNetlifyUrl: !!process.env.NETLIFY_DATABASE_URL,
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    source,
+    driver: url ? "neon-http" : "pglite",
+  };
+  try {
+    const db = await getDb();
+    const rows = await db.select().from(schema.comunidade).limit(1);
+    out.dbOk = true;
+    out.seeded = rows.length > 0;
+  } catch (err) {
+    out.dbOk = false;
+    out.error = err instanceof Error ? err.message : String(err);
+  }
+  return out;
 }
 
 export { schema };
