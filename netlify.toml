@@ -1,0 +1,26 @@
+# AI Workspace — configuração Netlify (ver docs/spec, seção 12)
+
+[build]
+  command = "pnpm build"
+  publish = "web/dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# API serverless (Hono catch-all) — a rota é declarada na própria função
+# via `export const config = { path: "/api/*" }` (Functions v2).
+
+# SPA fallback: qualquer rota que não seja /api/* nem asset volta ao index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"

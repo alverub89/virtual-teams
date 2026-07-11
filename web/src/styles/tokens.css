@@ -1,0 +1,35 @@
+/* Tokens de design — fonte da verdade, extraídos 1:1 do bloco :root do
+   protótipo (docs/prototipo/ai-workspace-prototipo.html). */
+:root {
+  --bg: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f3f2ee;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #898781;
+  --line: #e1e0d9;
+  --line-2: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.1);
+  --accent: #ec7000;
+  --accent-deep: #b85700;
+  --accent-soft: #fdeedd;
+  --accent-soft-2: #f7d3ab;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --crit: #d03b3b;
+  --sidebar: #2b2926;
+  --sidebar-2: #3a3733;
+  --sidebar-ink: #c9c5bd;
+  --sidebar-ink-2: #8f8a81;
+  --seq1: #f6c290;
+  --seq2: #f29b45;
+  --seq3: #ec7000;
+  --seq4: #b85700;
+  --seq5: #7a3900;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.05), 0 4px 14px rgba(11, 11, 11, 0.06);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
