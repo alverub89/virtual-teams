@@ -31,6 +31,19 @@ export async function resolveNeonUrl(): Promise<{ url?: string; source: string }
 // o Neon mesmo quando o banco é externo (Neon próprio, não o Netlify DB).
 async function ensureSchema(db: any) {
   const { sql } = await import("drizzle-orm");
+  // Fast-path: se o schema já está provisionado (SQL rodado ou 1ª conexão
+  // anterior), não re-executa o DDL — zero risco em reconexões.
+  try {
+    const r = await db.execute(
+      sql.raw(
+        "select 1 as ok from information_schema.tables where table_schema='ai_workspace' and table_name='convite' limit 1"
+      )
+    );
+    const rows = (r?.rows ?? r) as any[];
+    if (Array.isArray(rows) && rows.length > 0) return;
+  } catch {
+    /* segue para provisionar */
+  }
   const { DDL } = await import("./bootstrap-ddl");
   const stmts = DDL.split("--> statement-breakpoint")
     .map((s) => s.trim())
