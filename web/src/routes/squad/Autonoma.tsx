@@ -99,7 +99,7 @@ export default function Autonoma() {
         title="Execução autônoma"
         description="A squad virtual executa o plano de ponta a ponta e para nos checkpoints para a sua decisão — humano no loop, sempre."
         actions={
-          me?.papel === "pm" && (
+          (me?.papel === "pm" || me?.papel === "tech_lead") && (
             <Button variant="primary" onClick={() => setNovoAberto(true)}>
               ✦ Iniciar squad virtual
             </Button>
@@ -166,7 +166,7 @@ export default function Autonoma() {
                           </div>
                         )}
                         {p.status === "em_execucao" && <p className="muted">executando…</p>}
-                        {ck && me?.papel === "pm" && (
+                        {ck && (me?.papel === "pm" || me?.papel === "tech_lead") && (
                           <>
                             {ck.resumo && (
                               <div className="run-reason">

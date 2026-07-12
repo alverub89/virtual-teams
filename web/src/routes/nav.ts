@@ -97,7 +97,14 @@ export const CONSOLE_NAV: NavSection[] = [
         path: "/console",
         label: "Visão geral",
         title: "Console da plataforma",
-        description: "Dia a dia do arquiteto: blueprints, métodos, agentes e MCPs.",
+        description: "Setup da plataforma: estrutura, método, docs base, agentes e convites.",
+        fase: "Fase 2",
+      },
+      {
+        path: "/console/convites",
+        label: "Convites",
+        title: "Convites",
+        description: "Convide pessoas para as squads e para a gestão.",
         fase: "Fase 2",
       },
       {

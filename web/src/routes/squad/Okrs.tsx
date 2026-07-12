@@ -109,7 +109,7 @@ export default function Okrs() {
         title="OKRs"
         description="Seus objetivos e resultados-chave. Crie um objetivo, defina os KRs e associe as iniciativas que os movem."
         actions={
-          me?.papel === "pm" && (
+          (me?.papel === "pm" || me?.papel === "tech_lead") && (
             <Button variant="primary" onClick={() => setNovoAberto(true)}>
               + Novo objetivo
             </Button>
@@ -124,7 +124,7 @@ export default function Okrs() {
             Comece definindo o que sua squad quer alcançar neste trimestre. Depois é só criar iniciativas
             e pôr os agentes para trabalhar nelas.
           </p>
-          {me?.papel === "pm" && (
+          {(me?.papel === "pm" || me?.papel === "tech_lead") && (
             <Button variant="primary" onClick={() => setNovoAberto(true)}>
               Criar meu primeiro objetivo
             </Button>
@@ -170,7 +170,7 @@ export default function Okrs() {
                       ))}
                     </div>
                   )}
-                  {me?.papel === "pm" && okr.escopo === "squad" && (
+                  {(me?.papel === "pm" || me?.papel === "tech_lead") && okr.escopo === "squad" && (
                     <div className="kr-actions">
                       <Button onClick={() => { setMedindo(kr); setRealizado(""); }}>Atualizar realizado</Button>
                     </div>

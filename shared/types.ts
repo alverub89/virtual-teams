@@ -1,15 +1,22 @@
 import { z } from "zod";
 
-// Papéis e escopos — regra central: cria/edita só na própria squad; consulta o resto.
-export const Papel = z.enum([
-  "dev",
-  "pm",
-  "arquiteto",
-  "coordenador",
-  "gerente",
-  "diretor",
-]);
+// Papéis da POC:
+// - cto: monta a plataforma (estrutura, método, docs base, agentes, convites)
+// - pm / tech_lead / dev: membros de squad (entram por convite)
+// - gestao: gerencia a área e vê indicadores/produtividade
+export const Papel = z.enum(["cto", "pm", "tech_lead", "dev", "gestao"]);
 export type Papel = z.infer<typeof Papel>;
+
+export const PAPEL_LABEL: Record<Papel, string> = {
+  cto: "CTO · Plataforma",
+  pm: "Product Manager",
+  tech_lead: "Tech Lead",
+  dev: "Desenvolvedor(a)",
+  gestao: "Gestão",
+};
+
+// Papéis que o CTO pode convidar diretamente.
+export const PAPEIS_CONVIDAVEIS: Papel[] = ["pm", "tech_lead", "gestao"];
 
 export const Escopo = z.enum(["squad", "release_train", "comunidade"]);
 export type Escopo = z.infer<typeof Escopo>;
@@ -36,13 +43,15 @@ export const Me = z.object({
   papel: Papel,
   squadId: z.string().nullable(),
   squadNome: z.string().nullable(),
+  comunidadeId: z.string().nullable(),
+  onboardingConcluido: z.boolean(),
   escopos: z.array(Escopo),
 });
 export type Me = z.infer<typeof Me>;
 
-// Destino inicial por papel (docs/spec §4.1).
+// Destino inicial por papel.
 export function homeDoPapel(papel: Papel): string {
-  if (papel === "arquiteto") return "/console";
-  if (papel === "diretor" || papel === "gerente" || papel === "coordenador") return "/gestao";
+  if (papel === "cto") return "/console";
+  if (papel === "gestao") return "/gestao";
   return "/squad/iniciativas";
 }

@@ -83,19 +83,7 @@ export async function seedIfEmpty(db: any) {
     { agenteId: agQa.id, toolId: tools[4].id },
   ]);
 
-  const [bmad] = await db
-    .insert(s.metodo)
-    .values({ nome: "BMAD Method", versao: "v6", descricao: "Jornada padrão: brief → PRD → arquitetura → histórias → desenvolvimento → esteira & GMUD, com um agente por etapa." })
-    .returning();
-
-  await db.insert(s.metodoEtapa).values([
-    { metodoId: bmad.id, ordem: 1, nome: "Brief", agenteId: agAnalista.id, descricao: "Descoberta e alinhamento do problema" },
-    { metodoId: bmad.id, ordem: 2, nome: "PRD", agenteId: agPm.id, descricao: "Objetivo, RF/NFR e métricas de sucesso" },
-    { metodoId: bmad.id, ordem: 3, nome: "Arquitetura", agenteId: agArq.id, descricao: "Desenho, ADRs e mapeamento de repositórios" },
-    { metodoId: bmad.id, ordem: 4, nome: "Histórias", agenteId: agSm.id, descricao: "Slicing INVEST e sync com o backlog" },
-    { metodoId: bmad.id, ordem: 5, nome: "Desenvolvimento", agenteId: agDev.id, descricao: "Implementação assistida e PRs" },
-    { metodoId: bmad.id, ordem: 6, nome: "Esteira & GMUD", agenteId: agQa.id, descricao: "Gates de qualidade e mudança", tipo: "checkpoint" },
-  ]);
+  // Método NÃO entra no catálogo: é criado pelo CTO no onboarding (institucional).
 
   await db.insert(s.blueprint).values([
     { nome: "Microserviço Java padrão", descricao: "Spring Boot + observabilidade + resiliência padrão.", guardRails: ["Mascarar PII em logs e prompts", "Idempotência em toda operação financeira", "Circuit breaker nas integrações externas"] },

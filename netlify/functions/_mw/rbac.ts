@@ -14,13 +14,13 @@ type Acao =
   | "ver_gestao";
 
 const PAPEIS_POR_ACAO: Record<Acao, Papel[]> = {
-  criar_iniciativa: ["pm"],
-  imputar_kr: ["pm"],
-  decidir_checkpoint: ["pm"],
-  iniciar_run: ["pm"],
-  endossar_kb: ["arquiteto"],
-  configurar_plataforma: ["arquiteto"],
-  ver_gestao: ["diretor", "gerente", "coordenador"],
+  criar_iniciativa: ["pm", "tech_lead"],
+  imputar_kr: ["pm", "tech_lead"],
+  decidir_checkpoint: ["pm", "tech_lead"],
+  iniciar_run: ["pm", "tech_lead"],
+  endossar_kb: ["cto"],
+  configurar_plataforma: ["cto"],
+  ver_gestao: ["gestao", "cto"],
 };
 
 export const rbac =

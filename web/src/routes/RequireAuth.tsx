@@ -1,8 +1,8 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useMe } from "../lib/api";
 
-// Guarda de rotas: sem sessão → /login; logado sem squad → /onboarding.
-export default function RequireAuth({ needsSquad = true }: { needsSquad?: boolean }) {
+// Guarda de rotas: sem sessão → /login; CTO sem onboarding → /onboarding.
+export default function RequireAuth() {
   const { data, isLoading, error } = useMe();
   const location = useLocation();
 
@@ -13,7 +13,7 @@ export default function RequireAuth({ needsSquad = true }: { needsSquad?: boolea
       </div>
     );
   if (error || !data) return <Navigate to="/login" replace state={{ de: location.pathname }} />;
-  if (needsSquad && !data.squadId && location.pathname !== "/onboarding")
+  if (data.papel === "cto" && !data.onboardingConcluido && location.pathname !== "/onboarding")
     return <Navigate to="/onboarding" replace />;
   return <Outlet />;
 }

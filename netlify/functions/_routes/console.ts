@@ -10,6 +10,56 @@ import { composeSystemPrompt } from "../../../ai/prompts";
 // exige papel arquiteto (docs/spec §6.2).
 const app = new Hono();
 
+// Home do CTO: estado do setup (checklist) + cards das squads da comunidade.
+app.get("/setup", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const vazio = {
+    comunidade: null,
+    checklist: { area: false, metodo: false, docBase: false, convite: false },
+    squads: [],
+    agentes: 0,
+  };
+  if (!me.comunidadeId) return c.json(vazio);
+
+  const [com] = await db.select().from(s.comunidade).where(eq(s.comunidade.id, me.comunidadeId));
+  if (!com) return c.json(vazio);
+
+  const rts = (await db.select().from(s.releaseTrain)).filter((rt: any) => rt.comunidadeId === com.id);
+  const rtIds = new Set(rts.map((rt: any) => rt.id));
+  const squads = (await db.select().from(s.squad)).filter((sq: any) => rtIds.has(sq.releaseTrainId));
+  const squadIds = new Set(squads.map((sq: any) => sq.id));
+  const pessoas = (await db.select().from(s.pessoa)).filter((p: any) => p.comunidadeId === com.id);
+  const inis = (await db.select().from(s.iniciativa)).filter((i: any) => squadIds.has(i.squadId));
+  const okrs = (await db.select().from(s.okr)).filter((o: any) => o.squadId && squadIds.has(o.squadId));
+  const convites = (await db.select().from(s.convite)).filter((v: any) => v.comunidadeId === com.id);
+  const metodos = (await db.select().from(s.metodo)).filter((m: any) => m.ativo);
+  const docsBase = (await db.select().from(s.documento)).filter((d: any) => d.escopo === "comunidade");
+  const agentes = await db.select().from(s.agente);
+
+  return c.json({
+    comunidade: com,
+    checklist: {
+      area: squads.length > 0,
+      metodo: metodos.length > 0,
+      docBase: docsBase.length > 0,
+      convite: convites.length > 0,
+    },
+    releaseTrains: rts.map((rt: any) => rt.nome),
+    agentes: agentes.filter((a: any) => a.ativo).length,
+    metodo: metodos[0] ? { nome: metodos[0].nome } : null,
+    squads: squads.map((sq: any) => ({
+      id: sq.id,
+      nome: sq.nome,
+      releaseTrain: rts.find((rt: any) => rt.id === sq.releaseTrainId)?.nome ?? null,
+      pessoas: pessoas.filter((p: any) => p.squadId === sq.id).length,
+      iniciativas: inis.filter((i: any) => i.squadId === sq.id).length,
+      okrs: okrs.filter((o: any) => o.squadId === sq.id).length,
+      convitesPendentes: convites.filter((v: any) => v.squadId === sq.id && v.status === "pendente").length,
+    })),
+  });
+});
+
 app.get("/overview", async (c) => {
   const db = await getDb();
   const squads = await db.select().from(s.squad);

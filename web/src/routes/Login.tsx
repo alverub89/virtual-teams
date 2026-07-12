@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { post } from "../lib/api";
-import type { Me } from "../../../shared/types";
+import { homeDoPapel, type Me } from "../../../shared/types";
 
 type Modo = "entrar" | "criar";
 
@@ -24,7 +24,8 @@ export default function Login() {
       const payload = modo === "criar" ? { nome, email, senha } : { email, senha };
       const { me } = await post<{ me: Me }>(rota, payload);
       qc.setQueryData(["me"], me);
-      navigate(me.squadId ? "/squad/iniciativas" : "/onboarding", { replace: true });
+      const dest = me.papel === "cto" && !me.onboardingConcluido ? "/onboarding" : homeDoPapel(me.papel);
+      navigate(dest, { replace: true });
     } catch (e) {
       setErro((e as Error).message);
     } finally {
@@ -43,7 +44,7 @@ export default function Login() {
           <h1>AI Workspace</h1>
           <p className="l-sub">
             {modo === "criar"
-              ? "Crie sua conta e monte seu workspace do zero."
+              ? "Crie sua conta de CTO e monte a plataforma da sua área."
               : "Bem-vindo de volta. Entre para continuar."}
           </p>
 

@@ -106,7 +106,7 @@ export function AgenteEdit() {
   });
 
   if (!agente) return <p className="muted">Carregando…</p>;
-  const editavel = me?.papel === "arquiteto";
+  const editavel = me?.papel === "cto";
   const toggle = (arr: string[], setArr: (v: string[]) => void, val: string) =>
     setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
 

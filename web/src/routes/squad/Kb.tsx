@@ -86,7 +86,7 @@ export default function Kb() {
       {publicando && (
         <Modal
           title="Publicar artigo na Base de Conhecimento"
-          subtitle="Escolha o escopo — artigos de RT/comunidade dependem de endosso do arquiteto."
+          subtitle="Escolha o escopo — artigos de RT/comunidade dependem de endosso do CTO."
           onClose={() => setPublicando(false)}
           foot={
             <>
@@ -158,7 +158,7 @@ export function KbArtigo() {
             {artigo.endossos.map((n) => (
               <Chip key={n} tone="good">✓ {n === "comunidade" ? "comunidade" : "RT"}</Chip>
             ))}
-            {me?.papel === "arquiteto" && artigo.endossos.length < 2 && (
+            {me?.papel === "cto" && artigo.endossos.length < 2 && (
               <Button onClick={() => endossar.mutate(artigo.endossos.includes("release_train") ? "comunidade" : "release_train")}>
                 Endossar
               </Button>

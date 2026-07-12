@@ -157,7 +157,7 @@ export default function JornadaPage() {
             </>
           )}
 
-          {me?.papel === "pm" && etapa?.status === "em_andamento" && (
+          {(me?.papel === "pm" || me?.papel === "tech_lead") && etapa?.status === "em_andamento" && (
             <div style={{ marginTop: 16 }}>
               <Button variant="primary" onClick={() => concluir.mutate()}>
                 {concluir.isPending ? "Concluindo…" : `Concluir etapa ${etapa.ordem} e avançar`}

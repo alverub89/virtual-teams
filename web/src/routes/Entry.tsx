@@ -2,35 +2,33 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useMe } from "../lib/api";
 import { homeDoPapel } from "../../../shared/types";
 
-// Seletor de visão — só para quem tem acesso a mais de um contexto
-// (docs/spec §4.1); com um único contexto, redireciona direto.
+// Seletor de visão — só aparece para quem tem acesso a mais de um contexto.
 export default function Entry() {
   const navigate = useNavigate();
   const { data: me } = useMe();
-
   if (!me) return null;
 
   const visoes = [
     {
-      role: "Workspace da Squad",
-      title: "Construir produto com agentes",
-      desc: "Capacidades, jornada completa da iniciativa com um agente por etapa, OKRs e execução autônoma.",
-      to: "/squad/iniciativas",
-      pode: !!me.squadId || me.papel === "arquiteto",
+      role: "Console da Plataforma",
+      title: "Configurar a plataforma",
+      desc: "Estrutura da área, método institucional, documentação base, agentes e convites.",
+      to: "/console",
+      pode: me.papel === "cto",
     },
     {
-      role: "Console da Plataforma",
-      title: "Configurar como tudo funciona",
-      desc: "Blueprints, esteiras e GMUD, métodos, agentes & skills, MCPs, modelos e limites de custo.",
-      to: "/console",
-      pode: me.papel === "arquiteto",
+      role: "Workspace da Squad",
+      title: "Construir produto com agentes",
+      desc: "Iniciativas com a jornada, OKRs, execução autônoma e a estação dev.",
+      to: "/squad/iniciativas",
+      pode: ["pm", "tech_lead", "dev"].includes(me.papel),
     },
     {
       role: "Visão de Gestão",
-      title: "Acompanhar indicadores",
-      desc: "Fluxo de produção, lead time, sucesso de GMUD e custo de IA — com as documentações em consulta.",
+      title: "Acompanhar resultados",
+      desc: "Indicadores da área e produtividade das squads.",
       to: "/gestao",
-      pode: ["diretor", "gerente", "coordenador"].includes(me.papel),
+      pode: me.papel === "gestao" || me.papel === "cto",
     },
   ].filter((v) => v.pode);
 

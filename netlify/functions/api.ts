@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { auth } from "./_mw/auth";
 import authRoutes from "./_routes/auth";
 import onboarding from "./_routes/onboarding";
+import convites from "./_routes/convites";
 import iniciativas from "./_routes/iniciativas";
 import okrs from "./_routes/okrs";
 import capacidades from "./_routes/capacidades";
@@ -27,6 +28,7 @@ app.use("*", auth); // tudo abaixo exige sessão
 
 app.get("/me", (c) => c.json(c.get("me")));
 app.route("/onboarding", onboarding);
+app.route("/convites", convites);
 app.route("/iniciativas", iniciativas);
 app.route("/okrs", okrs);
 app.route("/capacidades", capacidades);

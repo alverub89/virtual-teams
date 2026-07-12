@@ -4,6 +4,7 @@ import { ToastProvider } from "./lib/toast";
 import { CONSOLE_NAV, GESTAO_NAV, SQUAD_NAV } from "./routes/nav";
 import Entry from "./routes/Entry";
 import Login from "./routes/Login";
+import Convite from "./routes/Convite";
 import Onboarding from "./routes/Onboarding";
 import RequireAuth from "./routes/RequireAuth";
 import Iniciativas from "./routes/squad/Iniciativas";
@@ -17,6 +18,7 @@ import Kb, { KbArtigo } from "./routes/squad/Kb";
 import Esteira from "./routes/squad/Esteira";
 import Comunidade from "./routes/squad/Comunidade";
 import CfgHome from "./routes/console/CfgHome";
+import Convites from "./routes/console/Convites";
 import Agentes, { AgenteEdit } from "./routes/console/Agentes";
 import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plataforma";
 import Indicadores from "./routes/gestao/Indicadores";
@@ -27,6 +29,7 @@ export default function App() {
     <ToastProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/convite/:token" element={<Convite />} />
 
         <Route element={<RequireAuth />}>
           <Route path="/onboarding" element={<Onboarding />} />
@@ -69,6 +72,7 @@ export default function App() {
             }
           >
             <Route path="/console" element={<CfgHome />} />
+            <Route path="/console/convites" element={<Convites />} />
             <Route path="/console/arquitetura" element={<Blueprints />} />
             <Route path="/console/esteira" element={<EsteiraConfig />} />
             <Route path="/console/metodos" element={<Metodos />} />

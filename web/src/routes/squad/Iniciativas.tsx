@@ -58,7 +58,7 @@ export default function Iniciativas() {
         title="Iniciativas da squad"
         description="Features em andamento e sua jornada — do brief à GMUD, com um agente em cada etapa."
         actions={
-          me?.papel === "pm" && (
+          (me?.papel === "pm" || me?.papel === "tech_lead") && (
             <Button variant="primary" onClick={() => setNovaAberta(true)}>
               + Nova iniciativa
             </Button>

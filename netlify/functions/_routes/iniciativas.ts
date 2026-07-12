@@ -154,7 +154,7 @@ app.post("/:codigo/chat", async (c) => {
     .from(s.iniciativa)
     .where(eq(s.iniciativa.codigo, c.req.param("codigo")));
   if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
-  if (ini.squadId !== me.squadId && me.papel !== "arquiteto")
+  if (ini.squadId !== me.squadId && me.papel !== "cto")
     return c.json({ error: "chat permitido apenas na própria squad" }, 403);
 
   const [etapaRow] = await db

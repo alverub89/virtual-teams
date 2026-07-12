@@ -37,7 +37,7 @@ const CriarDoc = z.object({
 
 app.post("/", async (c) => {
   const me = c.get("me");
-  if (!me.squadId && me.papel !== "arquiteto")
+  if (!me.squadId && me.papel !== "cto")
     return c.json({ error: "usuário sem squad" }, 400);
   const body = CriarDoc.safeParse(await c.req.json());
   if (!body.success) return c.json({ error: body.error.flatten() }, 400);

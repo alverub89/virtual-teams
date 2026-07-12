@@ -27,12 +27,35 @@ export async function resolveNeonUrl(): Promise<{ url?: string; source: string }
   return { source: "none" };
 }
 
+// Provisiona o schema no Neon (idempotente) — as functions da Netlify alcançam
+// o Neon mesmo quando o banco é externo (Neon próprio, não o Netlify DB).
+async function ensureSchema(db: any) {
+  const { sql } = await import("drizzle-orm");
+  const { DDL } = await import("./bootstrap-ddl");
+  const stmts = DDL.split("--> statement-breakpoint")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (err: any) {
+      // Ignora "já existe" (schema/tabela/coluna/constraint) — torna idempotente.
+      const code = err?.code ?? err?.cause?.code;
+      const msg = String(err?.message ?? "");
+      if (["42P06", "42P07", "42701", "42710", "42P16"].includes(code) || /already exists|duplicate/i.test(msg))
+        continue;
+      throw err;
+    }
+  }
+}
+
 async function initNeon(url: string) {
   const { neon } = await import("@neondatabase/serverless");
   const { drizzle } = await import("drizzle-orm/neon-http");
   const db = drizzle(neon(url), { schema });
+  await ensureSchema(db);
   const { seedIfEmpty } = await import("./seed");
-  await seedIfEmpty(db as any); // idempotente: só popula se o banco estiver vazio
+  await seedIfEmpty(db as any); // idempotente: só popula catálogo se vazio
   return db;
 }
 

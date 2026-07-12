@@ -20,6 +20,7 @@ export const aiWorkspace = pgSchema("ai_workspace");
 export const comunidade = aiWorkspace.table("comunidade", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
+  donoId: uuid("dono_id"), // CTO dono deste tenant (app-enforced, sem FK circular)
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -46,12 +47,33 @@ export const pessoa = aiWorkspace.table(
     email: text("email").notNull(),
     senhaHash: text("senha_hash"), // cadastro por email/senha (scrypt)
     githubLogin: text("github_login"),
-    papel: text("papel").notNull(), // dev|pm|arquiteto|coordenador|gerente|diretor
+    papel: text("papel").notNull(), // cto|pm|tech_lead|dev|gestao
+    comunidadeId: uuid("comunidade_id"), // tenant (app-enforced)
     squadId: uuid("squad_id").references(() => squad.id),
+    onboardingConcluido: boolean("onboarding_concluido").notNull().default(false),
     ativo: boolean("ativo").notNull().default(true),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("pessoa_email_uq").on(t.email)]
+);
+
+export const convite = aiWorkspace.table(
+  "convite",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    comunidadeId: uuid("comunidade_id").notNull(),
+    squadId: uuid("squad_id"), // null para papel gestao
+    email: text("email").notNull(),
+    papel: text("papel").notNull(), // pm|tech_lead|dev|gestao
+    token: text("token").notNull(),
+    status: text("status").notNull().default("pendente"), // pendente|aceito|cancelado
+    convidadoPor: uuid("convidado_por"),
+    convidadoNome: text("convidado_nome"),
+    emailEnviado: boolean("email_enviado").notNull().default(false),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    aceitoEm: timestamp("aceito_em", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("convite_token_uq").on(t.token)]
 );
 
 export const sessao = aiWorkspace.table("sessao", {
