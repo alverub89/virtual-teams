@@ -27,46 +27,61 @@ export async function resolveNeonUrl(): Promise<{ url?: string; source: string }
   return { source: "none" };
 }
 
-// Provisiona o schema no Neon (idempotente) — as functions da Netlify alcançam
-// o Neon mesmo quando o banco é externo (Neon próprio, não o Netlify DB).
-async function ensureSchema(db: any) {
+// Provisiona o schema no Neon. Marcador de conclusão: a tabela `convite`
+// (última do DDL). Se ela existir, o schema está completo → não mexe.
+// Se não, recria do zero numa única conexão (rápido e atômico) — seguro
+// porque não há dado real antes do provisionamento concluir.
+async function ensureSchema(url: string) {
+  const { neon } = await import("@neondatabase/serverless");
+  const { drizzle } = await import("drizzle-orm/neon-http");
   const { sql } = await import("drizzle-orm");
-  // Fast-path: se o schema já está provisionado (SQL rodado ou 1ª conexão
-  // anterior), não re-executa o DDL — zero risco em reconexões.
+  const dbHttp = drizzle(neon(url));
+
   try {
-    const r = await db.execute(
+    const r: any = await dbHttp.execute(
       sql.raw(
         "select 1 as ok from information_schema.tables where table_schema='ai_workspace' and table_name='convite' limit 1"
       )
     );
-    const rows = (r?.rows ?? r) as any[];
-    if (Array.isArray(rows) && rows.length > 0) return;
+    const rows = r?.rows ?? r;
+    if (Array.isArray(rows) && rows.length > 0) return; // já provisionado
   } catch {
     /* segue para provisionar */
   }
+
   const { DDL } = await import("./bootstrap-ddl");
-  const stmts = DDL.split("--> statement-breakpoint")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  for (const stmt of stmts) {
-    try {
-      await db.execute(sql.raw(stmt));
-    } catch (err: any) {
-      // Ignora "já existe" (schema/tabela/coluna/constraint) — torna idempotente.
-      const code = err?.code ?? err?.cause?.code;
-      const msg = String(err?.message ?? "");
-      if (["42P06", "42P07", "42701", "42710", "42P16"].includes(code) || /already exists|duplicate/i.test(msg))
-        continue;
-      throw err;
+  const stmts = DDL.split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
+  const runAll = async (run: (s: string) => Promise<unknown>) => {
+    await run('DROP SCHEMA IF EXISTS "ai_workspace" CASCADE');
+    for (const stmt of stmts) {
+      try {
+        await run(stmt);
+      } catch (err: any) {
+        console.error("[ensureSchema]", String(err?.message ?? err).slice(0, 140));
+      }
     }
+  };
+
+  // Preferência: Pool (WebSocket, 1 conexão — rápido). Fallback: HTTP (drizzle).
+  try {
+    const { Pool } = await import("@neondatabase/serverless");
+    const pool = new Pool({ connectionString: url });
+    try {
+      await runAll((s) => pool.query(s));
+    } finally {
+      await pool.end();
+    }
+  } catch (err: any) {
+    console.error("[ensureSchema] Pool indisponível, fallback HTTP:", String(err?.message ?? err).slice(0, 100));
+    await runAll((s) => dbHttp.execute(sql.raw(s)));
   }
 }
 
 async function initNeon(url: string) {
+  await ensureSchema(url);
   const { neon } = await import("@neondatabase/serverless");
   const { drizzle } = await import("drizzle-orm/neon-http");
   const db = drizzle(neon(url), { schema });
-  await ensureSchema(db);
   const { seedIfEmpty } = await import("./seed");
   await seedIfEmpty(db as any); // idempotente: só popula catálogo se vazio
   return db;
