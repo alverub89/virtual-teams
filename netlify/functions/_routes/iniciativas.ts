@@ -218,6 +218,50 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
   return doc;
 }
 
+// Abre a próxima etapa: o agente dela publica a PRIMEIRA mensagem já partindo
+// dos documentos gerados nas etapas anteriores — a etapa começa "em andamento"
+// e com contexto, sem o usuário precisar puxar do zero.
+async function abrirProximaEtapa(db: any, ini: any, proximaOrdem: number): Promise<void> {
+  const [etapaRow] = await db
+    .select()
+    .from(s.iniciativaEtapa)
+    .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proximaOrdem)));
+  if (!etapaRow?.agenteId) return;
+  const [ag] = await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId));
+  if (!ag) return;
+  // não duplica se a etapa já tiver conversa
+  const jaTem = await db
+    .select()
+    .from(s.mensagemChat)
+    .where(and(eq(s.mensagemChat.iniciativaId, ini.id), eq(s.mensagemChat.etapaOrdem, proximaOrdem)));
+  if (jaTem.length) return;
+
+  const anteriores = await contextoEtapasAnteriores(db, ini);
+  if (!anteriores) return; // sem documentos anteriores, não há o que "transbordar"
+  const foco = DOC_ETAPA[proximaOrdem]?.foco ?? etapaRow.nome;
+  try {
+    const provider = await getProvider();
+    const model = await resolveModel(TAREFA_POR_ETAPA[proximaOrdem] ?? "resumo");
+    const system =
+      `Você é ${ag.nome} (${ag.papel}). ${ag.personalidade}\n\n` +
+      `Você está ABRINDO a etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ` +
+      `Você JÁ TEM os documentos das etapas anteriores abaixo; use-os como base, sem recomeçar do zero.\n\n${anteriores}`;
+    const user =
+      `Escreva a PRIMEIRA mensagem desta etapa: cumprimente em uma linha, mostre em 2 a 4 bullets o que você já extraiu ` +
+      `dos documentos anteriores que é relevante para produzir ${foco}, e proponha o próximo passo (ou pergunte apenas as ` +
+      `lacunas que faltam). Seja objetivo, em português, e não repita o documento inteiro.`;
+    const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 700, temperature: 0.35 });
+    const txt = (res.content ?? "").trim();
+    if (txt) {
+      await db.insert(s.mensagemChat).values({
+        iniciativaId: ini.id, etapaOrdem: proximaOrdem, autor: "agente", autorNome: ag.nome, conteudo: txt,
+      });
+    }
+  } catch {
+    /* silencioso: a etapa abre normalmente, apenas sem a mensagem inicial */
+  }
+}
+
 /* Chat com o agente da etapa — streaming SSE (docs/spec §8.5). */
 app.post("/:codigo/chat", async (c) => {
   const me = c.get("me");
@@ -408,6 +452,8 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
       .update(s.iniciativaEtapa)
       .set({ status: "em_andamento" })
       .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
+    // a próxima etapa já abre iniciada, com base nos documentos anteriores
+    await abrirProximaEtapa(db, ini, proxima);
   }
   await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome, docId: doc.id });
   return c.json({ ok: true, proximaEtapa: proxima <= 6 ? proxima : null, docId: doc.id });
