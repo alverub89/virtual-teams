@@ -203,23 +203,83 @@ export function Metodos() {
 
 /* ==================== Esteiras & GMUD ==================== */
 
+interface IntegracoesResp {
+  status: {
+    github: { conectado: boolean; motivo: string };
+    serviceNow: { conectado: boolean; motivo: string };
+  };
+  config: { githubOrg: string | null; githubRepoPadrao: string | null; githubWorkflow: string | null; serviceNowInstance: string | null };
+}
+
 export function EsteiraConfig() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { data } = useQuery<IntegracoesResp>({ queryKey: ["integracoes"], queryFn: () => api("/console/integracoes") });
+  const [org, setOrg] = useState<string | null>(null);
+  const [repo, setRepo] = useState<string | null>(null);
+  const [wf, setWf] = useState<string | null>(null);
+  const [sn, setSn] = useState<string | null>(null);
+  // Estado só é "não editado ainda" enquanto null; ao carregar, hidrata uma vez.
+  const cfg = data?.config;
+  const orgV = org ?? cfg?.githubOrg ?? "";
+  const repoV = repo ?? cfg?.githubRepoPadrao ?? "";
+  const wfV = wf ?? cfg?.githubWorkflow ?? "deploy.yml";
+  const snV = sn ?? cfg?.serviceNowInstance ?? "";
+
+  const salvar = useMutation({
+    mutationFn: () => put("/console/integracoes", {
+      githubOrg: orgV.trim() || null,
+      githubRepoPadrao: repoV.trim() || null,
+      githubWorkflow: wfV.trim() || "deploy.yml",
+      serviceNowInstance: snV.trim() || null,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["integracoes"] }); toast("💾 Integrações salvas"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+
+  const gh = data?.status.github;
+  const snStatus = data?.status.serviceNow;
+
   return (
     <>
-      <PageHead title="Esteiras & GMUD" description="Gates de qualidade e regras de mudança. Configuração global — squads herdam." />
-      <Card pad className="cfg-github" >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="icon-sq">🐙</span>
-          <div style={{ flex: 1 }}>
-            <h3>Conexão com o GitHub</h3>
-            <p className="sub">Para puxar Actions/workflows reais, conecte a GitHub App na sua organização.</p>
+      <PageHead title="Esteiras & GMUD" description="Gates de qualidade e integrações reais (GitHub Actions + ServiceNow). Configuração da comunidade — squads herdam." />
+
+      <div className="grid g2" style={{ alignItems: "start" }}>
+        <Card pad className="cfg-github">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span className="icon-sq">🐙</span>
+            <div style={{ flex: 1 }}>
+              <h3>GitHub Actions</h3>
+              <p className="sub">Dispara a esteira real (workflow_dispatch) dos repositórios da squad.</p>
+            </div>
+            <Chip tone={gh?.conectado ? "good" : "warn"}>{gh?.conectado ? "conectado" : "não conectado"}</Chip>
           </div>
-          <Chip tone="warn">não conectado</Chip>
-        </div>
-        <div className="banner" style={{ marginTop: 12 }}>
-          🔌 <span>A integração oficial com o GitHub (Actions/GMUD reais) é o próximo passo — depende da GitHub App instalada na sua org. Assim que definirmos org e repositórios, isso vira real.</span>
-        </div>
-      </Card>
+          <p className="sub" style={{ margin: "8px 0 12px" }}>🔑 {gh?.motivo ?? "…"}</p>
+          <Fld label="Organização"><input className="in" value={orgV} onChange={(e) => setOrg(e.target.value)} placeholder="ex.: itau-meios" /></Fld>
+          <Fld label="Repositório padrão"><input className="in" value={repoV} onChange={(e) => setRepo(e.target.value)} placeholder="ex.: split-service" /></Fld>
+          <Fld label="Workflow (arquivo)"><input className="in" value={wfV} onChange={(e) => setWf(e.target.value)} placeholder="deploy.yml" /></Fld>
+        </Card>
+
+        <Card pad>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span className="icon-sq">🧾</span>
+            <div style={{ flex: 1 }}>
+              <h3>ServiceNow (GMUD)</h3>
+              <p className="sub">Abre change requests reais ao promover para produção.</p>
+            </div>
+            <Chip tone={snStatus?.conectado ? "good" : "warn"}>{snStatus?.conectado ? "conectado" : "não conectado"}</Chip>
+          </div>
+          <p className="sub" style={{ margin: "8px 0 12px" }}>🔑 {snStatus?.motivo ?? "…"}</p>
+          <Fld label="Instância ServiceNow"><input className="in" value={snV} onChange={(e) => setSn(e.target.value)} placeholder="ex.: itau (→ itau.service-now.com)" /></Fld>
+          <div className="banner" style={{ marginTop: 12, fontSize: 12 }}>
+            🔒 <span>As credenciais (tokens/senhas) ficam em variáveis de ambiente do servidor — nunca no banco. Sem elas, disparos ficam <b>pendentes</b> e a GMUD é registrada como rascunho local.</span>
+          </div>
+        </Card>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <Button variant="primary" onClick={() => salvar.mutate()}>{salvar.isPending ? "Salvando…" : "💾 Salvar integrações"}</Button>
+      </div>
+
       <div className="card card-pad" style={{ marginTop: 14 }}>
         <h3>Gates de qualidade (esteira padrão)</h3>
         <p className="sub" style={{ marginBottom: 10 }}>todo repositório conectado passa por estes gates</p>

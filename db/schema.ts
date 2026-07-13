@@ -491,6 +491,19 @@ export const gmud = aiWorkspace.table("gmud", {
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Configuração das integrações reais de esteira/GMUD por comunidade. As
+// CREDENCIAIS ficam em variáveis de ambiente (GITHUB_TOKEN, SERVICENOW_*),
+// nunca no banco — aqui guardamos só org/repo/workflow e a instância alvo.
+export const integracaoPlataforma = aiWorkspace.table("integracao_plataforma", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  comunidadeId: uuid("comunidade_id").notNull().references(() => comunidade.id),
+  githubOrg: text("github_org"),
+  githubRepoPadrao: text("github_repo_padrao"),
+  githubWorkflow: text("github_workflow").default("deploy.yml"),
+  serviceNowInstance: text("service_now_instance"),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const pullRequest = aiWorkspace.table("pull_request", {
   id: uuid("id").primaryKey().defaultRandom(),
   repositorioId: uuid("repositorio_id").notNull().references(() => repositorio.id),

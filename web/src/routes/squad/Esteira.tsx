@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { Chip, PageHead } from "../../components/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, post, useMe } from "../../lib/api";
+import { Button, Chip, PageHead } from "../../components/ui";
+import { useToast } from "../../lib/toast";
 
 interface EsteiraData {
   execucoes: { id: string; repositorio: string; etapa: string; status: string; detalhe: string | null }[];
@@ -17,16 +18,47 @@ const GMUD_TONE: Record<string, "blue" | "good" | "warn" | "crit" | "neutral"> =
 const ORDEM_ETAPAS = ["build", "testes", "seguranca", "deploy_hml", "gmud", "deploy_prod"];
 
 export default function Esteira() {
+  const { data: me } = useMe();
+  const toast = useToast();
+  const qc = useQueryClient();
   const { data } = useQuery<EsteiraData>({ queryKey: ["esteira"], queryFn: () => api("/esteira") });
   const execucoes = [...(data?.execucoes ?? [])].sort(
     (a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa)
   );
+  const podeAgir = me?.papel === "pm" || me?.papel === "tech_lead";
+
+  const disparar = useMutation({
+    mutationFn: () => post<{ ok: boolean; pendente?: boolean; mensagem: string }>("/esteira/disparar", {}),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["esteira"] });
+      toast(r.ok ? `🚀 ${r.mensagem}` : r.pendente ? `🔌 ${r.mensagem}` : `⚠️ ${r.mensagem}`);
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const abrirGmud = useMutation({
+    mutationFn: (titulo: string) => post<{ ok: boolean; pendente?: boolean; mensagem: string; numero: string }>("/esteira/gmud", { titulo }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["esteira"] });
+      toast(r.ok ? `🧾 ${r.mensagem}` : `🔌 GMUD ${r.numero} registrada como rascunho — ${r.mensagem}`);
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const novaGmud = () => {
+    const t = prompt("Título da mudança (GMUD):");
+    if (t && t.trim().length >= 4) abrirGmud.mutate(t.trim());
+  };
 
   return (
     <>
       <PageHead
         title="Esteira & GMUDs"
         description="Gates de qualidade da esteira padrão e as mudanças (GMUD) da squad no ServiceNow. Abrir GMUD é ação crítica — sempre com checkpoint humano."
+        actions={podeAgir && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={() => disparar.mutate()}>{disparar.isPending ? "Disparando…" : "🚀 Disparar esteira"}</Button>
+            <Button variant="primary" onClick={novaGmud}>🧾 Abrir GMUD</Button>
+          </div>
+        )}
       />
       <div className="card card-pad" style={{ marginBottom: 14 }}>
         <h3>Esteira — {execucoes[0]?.repositorio ?? "sem execução ativa"}</h3>

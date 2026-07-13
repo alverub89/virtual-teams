@@ -115,6 +115,43 @@ app.get("/auditoria", rbac("configurar_plataforma"), async (c) => {
   });
 });
 
+// Config das integrações reais (GitHub Actions + ServiceNow) da comunidade.
+// Credenciais NUNCA passam por aqui — só org/repo/workflow/instância.
+app.get("/integracoes", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const { statusIntegracoes } = await import("../_lib/integracoes");
+  let cfg: any = null;
+  if (me.comunidadeId) {
+    [cfg] = (await db.select().from(s.integracaoPlataforma)).filter((i: any) => i.comunidadeId === me.comunidadeId);
+  }
+  return c.json({
+    status: statusIntegracoes(),
+    config: cfg
+      ? { githubOrg: cfg.githubOrg, githubRepoPadrao: cfg.githubRepoPadrao, githubWorkflow: cfg.githubWorkflow, serviceNowInstance: cfg.serviceNowInstance }
+      : { githubOrg: null, githubRepoPadrao: null, githubWorkflow: "deploy.yml", serviceNowInstance: null },
+  });
+});
+
+app.put("/integracoes", rbac("configurar_plataforma"), async (c) => {
+  const me = c.get("me");
+  if (!me.comunidadeId) return c.json({ error: "sem comunidade" }, 400);
+  const body = z.object({
+    githubOrg: z.string().max(120).nullable().optional(),
+    githubRepoPadrao: z.string().max(200).nullable().optional(),
+    githubWorkflow: z.string().max(120).nullable().optional(),
+    serviceNowInstance: z.string().max(120).nullable().optional(),
+  }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const [existe] = (await db.select().from(s.integracaoPlataforma)).filter((i: any) => i.comunidadeId === me.comunidadeId);
+  const campos = { ...body.data, atualizadoEm: new Date() };
+  if (existe) await db.update(s.integracaoPlataforma).set(campos).where(eq(s.integracaoPlataforma.id, existe.id));
+  else await db.insert(s.integracaoPlataforma).values({ comunidadeId: me.comunidadeId, ...campos });
+  await audit(me, "config_integracoes", `comunidade:${me.comunidadeId}`, body.data);
+  return c.json({ ok: true });
+});
+
 /* ---------- agentes, skills & tools ---------- */
 
 app.get("/agentes", async (c) => {
