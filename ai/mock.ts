@@ -64,7 +64,28 @@ function talvezMcpJson(req: ChatRequest): string | null {
   });
 }
 
+// Loop do agente executor: 1ª rodada (sem observações) chama a 1ª tool; depois,
+// com observações, encerra com resposta final. Mantém a demo navegável sem gateway.
+function talvezAgenteExecutor(req: ChatRequest): string | null {
+  if (!/ACIONANDO as tools|acao.*chamar/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  if (/Observações até agora/i.test(ultima)) {
+    return JSON.stringify({ acao: "final", resposta: "Pronto — acionei a tool do MCP e consolidei o resultado acima para o seu objetivo." });
+  }
+  const m = req.system.match(/Tools disponíveis:\s*(\[[\s\S]*\])\s*$/);
+  let tools: any[] = [];
+  try { tools = m ? JSON.parse(m[1]) : []; } catch { tools = []; }
+  const t0 = tools[0];
+  const args: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries((t0?.schema?.properties as any) ?? {})) {
+    args[k] = /number/.test((v as any)?.type) ? 1 : "exemplo";
+  }
+  return JSON.stringify({ acao: t0 ? "chamar" : "final", tool: t0?.nome, args, resposta: t0 ? undefined : "Nenhuma tool disponível." });
+}
+
 function responder(req: ChatRequest): string {
+  const exec = talvezAgenteExecutor(req);
+  if (exec) return exec;
   const mcp = talvezMcpJson(req);
   if (mcp) return mcp;
   const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";

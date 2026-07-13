@@ -148,4 +148,71 @@ app.post("/mcp-client/call", async (c) => {
   return c.json(await chamarToolRemoto(m.url, name, args ?? {}, m.token ?? undefined));
 });
 
+// Agente executor: dado um MCP acessível e um objetivo, o agente escolhe e
+// ACIONA as tools do MCP (loop ReAct), do nosso lado, e devolve o rastro.
+app.post("/agente", async (c) => {
+  const me = c.get("me");
+  const { mcpId, objetivo } = (await c.req.json().catch(() => ({}))) as { mcpId?: string; objetivo?: string };
+  if (!mcpId || !objetivo) return c.json({ error: "mcpId e objetivo são obrigatórios" }, 400);
+  const db = await getDb();
+  const m = await mcpAcessivel(db, me, mcpId);
+  if (!m) return c.json({ error: "MCP não acessível" }, 403);
+
+  const { chamarToolRemoto, listarToolsRemoto } = await import("../_lib/mcpclient");
+  const { executarTool, gerarJson } = await import("../_lib/aigen");
+
+  // Catálogo de tools + executor (remoto via cliente MCP, ou hospedado no app).
+  let toolSpecs: { nome: string; descricao: string; schema: any }[] = [];
+  let exec: (nome: string, args: any) => Promise<{ ok: boolean; resultado?: unknown; erro?: string }>;
+  if (m.url) {
+    const r = await listarToolsRemoto(m.url, m.token ?? undefined);
+    if (!r.ok) return c.json({ error: `falha ao listar tools do MCP: ${r.erro}` }, 502);
+    toolSpecs = (r.tools ?? []).map((t: any) => ({ nome: t.name, descricao: t.description ?? "", schema: t.inputSchema ?? {} }));
+    exec = (nome, args) => chamarToolRemoto(m.url as string, nome, args ?? {}, m.token ?? undefined);
+  } else {
+    const tools = (await db.select().from(s.tool)).filter((t: any) => t.conexaoMcpId === mcpId);
+    toolSpecs = tools.map((t: any) => ({ nome: t.nome, descricao: t.descricao ?? "", schema: t.inputSchema ?? {} }));
+    const byName = new Map(tools.map((t: any) => [t.nome, t]));
+    exec = async (nome, args) => { const t = byName.get(nome); return t ? executarTool(t as any, args ?? {}) : { ok: false, erro: "tool inexistente" }; };
+  }
+  if (!toolSpecs.length) return c.json({ error: "este MCP não expõe tools" }, 400);
+
+  const passos: any[] = [];
+  const observacoes: string[] = [];
+  let resposta = "";
+  const system =
+    "Você é um agente que cumpre um objetivo ACIONANDO as tools de um MCP. Responda SOMENTE JSON. " +
+    'Para chamar uma tool: {"acao":"chamar","tool":"<nome>","args":{...}}. ' +
+    'Quando já tiver a resposta final: {"acao":"final","resposta":"<texto>"}. ' +
+    "Chame no máximo o necessário. Tools disponíveis: " + JSON.stringify(toolSpecs);
+
+  for (let i = 0; i < 4; i++) {
+    let plano: any;
+    try {
+      plano = await gerarJson({
+        tarefa: "historias",
+        system,
+        instrucao: `Objetivo: ${objetivo}\n` + (observacoes.length ? `Observações até agora:\n${observacoes.join("\n")}` : "Ainda sem observações."),
+        maxTokens: 700,
+      });
+    } catch (e) {
+      resposta = `Falha do agente: ${e instanceof Error ? e.message : e}`;
+      break;
+    }
+    if (plano?.acao === "chamar" && plano.tool) {
+      const r = await exec(plano.tool, plano.args ?? {});
+      const txt = typeof r.resultado === "string" ? r.resultado : JSON.stringify(r.resultado);
+      passos.push({ acao: "chamar", tool: plano.tool, args: plano.args ?? {}, ok: r.ok, resultado: r.ok ? (txt ?? "").slice(0, 1500) : undefined, erro: r.erro });
+      observacoes.push(`Tool ${plano.tool}(${JSON.stringify(plano.args ?? {})}) -> ${r.ok ? (txt ?? "").slice(0, 800) : "ERRO: " + r.erro}`);
+    } else {
+      resposta = plano?.resposta ?? "sem resposta";
+      passos.push({ acao: "final", resposta });
+      break;
+    }
+  }
+  if (!resposta) resposta = "Limite de passos atingido — objetivo pode não estar completo.";
+  await audit(me, "agente_executor", `mcp:${mcpId}`, { objetivo, passos: passos.length });
+  return c.json({ resposta, passos });
+});
+
 export default app;

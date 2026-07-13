@@ -27,6 +27,15 @@ export default function Lab() {
   const [tExec, setTExec] = useState("ia"); const [tParam, setTParam] = useState("");
   const [tUrl, setTUrl] = useState(""); const [tMetodo, setTMetodo] = useState("GET");
 
+  const [agente, setAgente] = useState<{ id: string; nome: string } | null>(null);
+  const [objetivo, setObjetivo] = useState("");
+  const [resultado, setResultado] = useState<{ resposta: string; passos: any[] } | null>(null);
+  const rodarAgente = useMutation({
+    mutationFn: () => post<{ resposta: string; passos: any[] }>("/lab/agente", { mcpId: agente!.id, objetivo }),
+    onSuccess: (r) => setResultado(r),
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+
   const [novoMcp, setNovoMcp] = useState(false);
   const [mNome, setMNome] = useState(""); const [mSis, setMSis] = useState(""); const [mDesc, setMDesc] = useState(""); const [mUrl, setMUrl] = useState(""); const [mEscopo, setMEscopo] = useState("squad"); const [mToken, setMToken] = useState("");
   const presetNetlify = () => { setMNome("Netlify"); setMSis("netlify"); setMDesc("Deploy, sites e ambientes na Netlify (MCP oficial)"); setMUrl("https://netlify-mcp.netlify.app/mcp"); setMEscopo("comunidade"); };
@@ -114,13 +123,40 @@ export default function Lab() {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {data.disponiveis.map((m) => (
           <div key={m.id}>
-            <div style={{ fontWeight: 600, margin: "2px 4px 6px" }}>{m.nome} <span className="muted" style={{ fontWeight: 400 }}>· {m.sistema} · {m.escopo === "global" ? "global" : "squad"}</span></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 4px 6px" }}>
+              <span style={{ fontWeight: 600 }}>{m.nome}</span>
+              <span className="muted">· {m.sistema} · {m.escopo === "global" ? "global" : "squad"}</span>
+              <span style={{ flex: 1 }} />
+              <Button onClick={() => { setAgente({ id: m.id, nome: m.nome }); setObjetivo(""); setResultado(null); }}>🤖 Agente</Button>
+            </div>
             {m.url
               ? <RemoteMcpTester mcpId={m.id} apiBase="/lab" />
               : <Card pad><p className="sub">{m.descricao || m.sistema}</p>{m.endpoint && <div className="prompt-box" style={{ marginTop: 6, fontSize: 11 }}>{m.endpoint}</div>}</Card>}
           </div>
         ))}
       </div>
+
+      {agente && (
+        <Modal title={`🤖 Agente · ${agente.nome}`} subtitle="Descreva o objetivo. O agente escolhe e aciona as tools do MCP para cumprir." onClose={() => setAgente(null)}
+          foot={<><Button onClick={() => setAgente(null)}>Fechar</Button><Button variant="primary" onClick={() => objetivo.length >= 4 && rodarAgente.mutate()}>{rodarAgente.isPending ? "Acionando…" : "Executar"}</Button></>}>
+          <Fld label="Objetivo"><textarea className="in" rows={2} value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Ex.: liste os bancos e me diga o código do Itaú" /></Fld>
+          {resultado && (
+            <>
+              <div className="sec-title" style={{ marginTop: 8 }}>Passos do agente</div>
+              {resultado.passos.map((p, i) => (
+                <div key={i} className="prompt-box" style={{ marginBottom: 6, fontSize: 12 }}>
+                  {p.acao === "chamar"
+                    ? <><b>▶ {p.tool}</b>({JSON.stringify(p.args)}) {p.ok ? "✓" : "✗ " + (p.erro ?? "")}
+                        {p.resultado && <div style={{ marginTop: 4, whiteSpace: "pre-wrap", opacity: .85 }}>{String(p.resultado).slice(0, 500)}</div>}</>
+                    : <><b>■ resposta final</b></>}
+                </div>
+              ))}
+              <div className="sec-title">Resposta</div>
+              <div className="prompt-box" style={{ whiteSpace: "pre-wrap" }}>{resultado.resposta}</div>
+            </>
+          )}
+        </Modal>
+      )}
 
       {novaTool && (
         <Modal title="Nova tool" subtitle="Fica como rascunho; publique para enviar ao CTO." onClose={() => setNovaTool(false)}
