@@ -12,6 +12,7 @@ interface Dados {
   semSquad?: boolean;
   podeEditar: boolean;
   temToken: boolean;
+  tokenViaEnv?: boolean;
   repos: Repo[];
   analisando: { versao: number; progresso: string | null; motivo: string | null } | null;
   mapaAtual: Mapa | null;
@@ -89,6 +90,7 @@ export default function Capacidades() {
         description="A arquitetura de negócio da squad — fluxos de valor e capacidades — construída pela IA sobre os seus repositórios."
         actions={data.podeEditar && (
           <>
+            <Button onClick={() => setTokenModal(true)}>🔑 Token GitHub</Button>
             {data.reposNovos.length > 0 && data.mapaAtual && !data.analisando && <Button onClick={() => avaliar.mutate()}>⚠️ Avaliar impacto ({data.reposNovos.length})</Button>}
             {!data.analisando && <Button variant="primary" onClick={() => gerar.mutate()}>{data.mapaAtual ? "Regerar" : "🧠 Gerar mapa"}</Button>}
           </>
@@ -111,6 +113,8 @@ export default function Capacidades() {
       <div className="sec-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span>Repositórios da squad ({data.repos.length})</span>
         {data.podeEditar && <button className="btn" style={{ padding: "2px 10px" }} onClick={() => setRepoModal(true)}>+ Conectar</button>}
+        <span style={{ flex: 1 }} />
+        <Chip tone={data.temToken ? "good" : "warn"}>{data.temToken ? (data.tokenViaEnv ? "🔑 token via env" : "🔑 token conectado") : "🔑 sem token"}</Chip>
       </div>
       <Card pad style={{ marginBottom: 12 }}>
         {data.repos.length === 0 && <p className="empty-note">Conecte ao menos um repositório para gerar o mapa.</p>}
