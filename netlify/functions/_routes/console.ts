@@ -1064,12 +1064,34 @@ app.post("/rollback-demo", async (c) => {
 app.get("/aprovacoes", cfg, async (c) => {
   const db = await getDb();
   const squads = await db.select().from(s.squad);
+  const pessoas = await db.select().from(s.pessoa);
+  const agentes = await db.select().from(s.agente);
+  const agTools = await db.select().from(s.agenteTool);
   const nomeSquad = (id: string | null) => squads.find((sq: any) => sq.id === id)?.nome ?? null;
+  const nomePessoa = (id: string | null) => pessoas.find((p: any) => p.id === id)?.nome ?? null;
+  // Agentes que já consomem a tool (impacto da aprovação).
+  const consumidores = (toolId: string) =>
+    agTools.filter((at: any) => at.toolId === toolId)
+      .map((at: any) => agentes.find((a: any) => a.id === at.agenteId)?.nome)
+      .filter(Boolean) as string[];
   const tools = (await db.select().from(s.tool)).filter((t: any) => t.aprovacao === "pendente");
   const mcps = (await db.select().from(s.conexaoMcp)).filter((m: any) => m.aprovacao === "pendente");
   return c.json({
-    tools: tools.map((t: any) => ({ ...t, squadNome: nomeSquad(t.squadId) })),
-    mcps: mcps.map(({ token, ...m }: any) => ({ ...m, temToken: !!token, squadNome: nomeSquad(m.squadId) })),
+    tools: tools.map((t: any) => ({
+      ...t,
+      squadNome: nomeSquad(t.squadId),
+      solicitante: nomePessoa(t.criadoPor),
+      submetidoEm: t.submetidoEm,
+      temSchema: !!t.inputSchema, // schema validável antes de ativar
+      agentesConsumidores: consumidores(t.id),
+    })),
+    mcps: mcps.map(({ token, ...m }: any) => ({
+      ...m,
+      temToken: !!token,
+      squadNome: nomeSquad(m.squadId),
+      solicitante: nomePessoa(m.criadoPor),
+      submetidoEm: m.submetidoEm,
+    })),
   });
 });
 
