@@ -41,11 +41,24 @@ declare module "hono" {
 export const auth: MiddlewareHandler = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE);
   if (!token) return c.json({ error: "não autenticado" }, 401);
+  let me: Me;
   try {
     const { payload } = await jwtVerify(token, secret());
-    c.set("me", payload.me as Me);
+    me = payload.me as Me;
   } catch {
     return c.json({ error: "sessão inválida ou expirada" }, 401);
   }
+
+  // "Auditar como squad": só o CTO pode assumir a visão de uma squad, e
+  // somente em leitura (GET). O header vem do front (modo auditoria).
+  const auditarSquad = c.req.header("x-auditar-squad");
+  if (auditarSquad && me.papel === "cto") {
+    if (c.req.method !== "GET") {
+      return c.json({ error: "modo auditoria: somente leitura — saia da auditoria para editar" }, 403);
+    }
+    me = { ...me, squadId: auditarSquad, auditando: true };
+  }
+
+  c.set("me", me);
   await next();
 };

@@ -18,10 +18,13 @@ export default function Entry() {
     },
     {
       role: "Workspace da Squad",
-      title: "Construir produto com agentes",
-      desc: "Iniciativas com a jornada, OKRs, execução autônoma e a estação dev.",
+      title: me.papel === "cto" ? "Auditar uma squad" : "Construir produto com agentes",
+      desc:
+        me.papel === "cto"
+          ? "Entre na visão de qualquer squad em modo leitura — iniciativas, jornada, docs e OKRs."
+          : "Iniciativas com a jornada, OKRs, execução autônoma e a estação dev.",
       to: "/squad/iniciativas",
-      pode: ["pm", "tech_lead", "dev"].includes(me.papel),
+      pode: ["pm", "tech_lead", "dev", "cto"].includes(me.papel),
     },
     {
       role: "Visão de Gestão",

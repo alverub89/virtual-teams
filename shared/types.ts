@@ -46,6 +46,8 @@ export const Me = z.object({
   comunidadeId: z.string().nullable(),
   onboardingConcluido: z.boolean(),
   escopos: z.array(Escopo),
+  // true quando o CTO está com a visão de uma squad em modo auditoria (leitura).
+  auditando: z.boolean().optional(),
 });
 export type Me = z.infer<typeof Me>;
 

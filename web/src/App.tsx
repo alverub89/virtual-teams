@@ -53,6 +53,7 @@ export default function App() {
           <Route
             element={
               <AppShell
+                audit
                 sections={SQUAD_NAV}
                 foot={
                   <>

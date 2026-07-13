@@ -70,6 +70,17 @@ app.route("/mcp", mcpLive); // servidor MCP vivo por slug — público (clientes
 app.use("*", auth); // tudo abaixo exige sessão
 
 app.get("/me", (c) => c.json(c.get("me")));
+
+// Squads que o CTO pode auditar ("auditar como squad"). Só o CTO enxerga a
+// lista; os demais papéis já estão presos à própria squad.
+app.get("/me/squads", async (c) => {
+  const me = c.get("me");
+  if (me.papel !== "cto") return c.json({ squads: [] });
+  const { getDb, schema } = await import("../../db/client");
+  const db = await getDb();
+  const squads = await db.select().from(schema.squad);
+  return c.json({ squads: squads.map((s: any) => ({ id: s.id, nome: s.nome })) });
+});
 app.route("/onboarding", onboarding);
 app.route("/convites", convites);
 app.route("/iniciativas", iniciativas);
