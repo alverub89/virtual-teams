@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post } from "../../lib/api";
 import { Button, Card, Chip, Fld, Modal, PageHead } from "../../components/ui";
@@ -30,9 +31,22 @@ export default function Convites() {
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState("pm");
   const [squadId, setSquadId] = useState("");
+  const [params, setParams] = useSearchParams();
 
   const { data: convites } = useQuery<Convite[]>({ queryKey: ["convites"], queryFn: () => api("/convites") });
   const { data: setup } = useQuery<Setup>({ queryKey: ["console-setup"], queryFn: () => api("/console/setup") });
+
+  // Atalho vindo do card da squad (Console): abre já convidando para ela.
+  useEffect(() => {
+    const sq = params.get("squad");
+    if (sq) {
+      setSquadId(sq);
+      setPapel("pm");
+      setAberto(true);
+      params.delete("squad");
+      setParams(params, { replace: true });
+    }
+  }, [params, setParams]);
 
   const criar = useMutation({
     mutationFn: () =>

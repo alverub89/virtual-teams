@@ -349,7 +349,10 @@ app.put("/modelos/:id", rbac("configurar_plataforma"), async (c) => {
 /* Consumo de tokens por squad no mês (docs/spec §7.2). */
 app.get("/consumo", async (c) => {
   const db = await getDb();
-  const consumo = await db.select().from(s.consumoTokens);
+  // Mesma base da Visão de Gestão (Indicadores): só o mês corrente. Assim os
+  // números batem entre as telas — uma única fonte de verdade.
+  const mesAtual = new Date().toISOString().slice(0, 7);
+  const consumo = (await db.select().from(s.consumoTokens)).filter((r: any) => r.mes === mesAtual);
   const squads = await db.select().from(s.squad);
   return c.json(
     consumo.map((r: any) => {
@@ -359,6 +362,7 @@ app.get("/consumo", async (c) => {
         ...r,
         squadNome: sq?.nome ?? "?",
         budget: sq?.budgetTokensMes ?? null,
+        // % do TETO da squad (não é share do total) — o front rotula assim.
         percentual: sq?.budgetTokensMes ? Math.round((total / sq.budgetTokensMes) * 100) : null,
       };
     })

@@ -362,12 +362,13 @@ export function Mcps() {
 
       <div className="sec-title">Consumo por squad — mês atual</div>
       <div className="card card-pad">
+        <p className="sub" style={{ marginTop: 0, marginBottom: 10, fontSize: 12 }}>Cada barra é o consumo da squad frente ao <b>seu próprio teto</b> do mês — não é fatia de um total, então os percentuais não somam 100%.</p>
         {consumo?.length === 0 && <p className="empty-note">Sem consumo registrado ainda.</p>}
         {consumo?.map((c) => (
           <div key={c.id} style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", gap: 8, fontSize: 12.5, marginBottom: 4 }}>
               <b style={{ flex: 1 }}>{c.squadNome}</b>
-              <span className="muted num">{((c.promptTokens + c.completionTokens) / 1e6).toFixed(2)}M · R$ {c.custo.toFixed(0)}{c.percentual != null && ` · ${c.percentual}%`}</span>
+              <span className="muted num">{((c.promptTokens + c.completionTokens) / 1e6).toFixed(2)}M{c.budget ? ` / ${(c.budget / 1e6).toFixed(1)}M` : ""} · R$ {c.custo.toFixed(0)}{c.percentual != null ? ` · ${c.percentual}% do teto` : " · sem teto"}</span>
             </div>
             <div className="meter"><i className={c.percentual != null && c.percentual >= 80 ? "warn" : ""} style={{ width: `${Math.min(100, c.percentual ?? 0)}%` }} /></div>
           </div>

@@ -84,6 +84,11 @@ export default function CfgHome() {
               <span><b>{sq.iniciativas}</b> iniciativas</span>
               <span><b>{sq.okrs}</b> OKRs</span>
             </div>
+            {sq.pessoas === 0 && (
+              <Link to={`/console/convites?squad=${sq.id}`} className="btn" style={{ textDecoration: "none", marginTop: 10, display: "inline-block", fontSize: 12.5 }}>
+                + Convidar pessoas para esta squad
+              </Link>
+            )}
             <BudgetSetter squadId={sq.id} atual={sq.budgetTokensMes} />
           </Card>
         ))}

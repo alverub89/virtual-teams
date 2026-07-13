@@ -35,7 +35,7 @@ export default function Indicadores() {
       <div className="grid g4" style={{ marginBottom: 14 }}>
         <Kpi label="Iniciativas ativas" value={data ? data.kpis.iniciativasAtivas : "…"} delta={data ? `${data.kpis.squads} squads` : undefined} />
         <Kpi label="Lead time — ideia ao deploy" value={data ? (data.kpis.leadTimeDias ?? "—") : "…"} suffix="dias" />
-        <Kpi label="Sucesso de GMUD (90d)" value={data?.kpis.taxaSucessoGmud != null ? `${data.kpis.taxaSucessoGmud}%` : "…"} delta={data ? `${data.gmuds90d.length} mudanças` : undefined} />
+        <Kpi label="Sucesso de GMUD (90d)" value={!data ? "…" : data.kpis.taxaSucessoGmud != null ? `${data.kpis.taxaSucessoGmud}%` : "—"} delta={!data ? undefined : data.kpis.taxaSucessoGmud != null ? `${data.gmuds90d.length} mudanças` : "amostra insuficiente"} />
         <Kpi label="Custo de IA no mês" value={data ? `R$ ${data.kpis.custoIaMes.toFixed(0)}` : "…"} delta={data ? `${data.kpis.runsAutonomos} runs autônomos` : undefined} />
       </div>
 
