@@ -19,7 +19,9 @@ const NovoConvite = z.object({
 
 function podeConvidar(papelRequisitante: Papel, papelAlvo: string): boolean {
   if (papelRequisitante === "cto") return true;
-  if ((papelRequisitante === "pm" || papelRequisitante === "tech_lead") && papelAlvo === "dev") return true;
+  // Líderes de squad montam o time e a liderança das squads (dev, pm, tech_lead);
+  // papel de gestão continua exclusivo do CTO.
+  if ((papelRequisitante === "pm" || papelRequisitante === "tech_lead") && ["dev", "pm", "tech_lead"].includes(papelAlvo)) return true;
   return false;
 }
 
