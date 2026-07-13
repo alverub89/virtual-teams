@@ -7,7 +7,7 @@ import { useToast } from "../../lib/toast";
 interface Repo { id: string; nome: string; linguagem: string | null; url: string | null }
 interface Capacidade { nome: string; nivel: number; pai: string | null; fluxoValor?: string; descricao?: string; repos?: string[] }
 interface Conteudo { resumo?: string; fluxosValor?: { nome: string; descricao?: string }[]; capacidades?: Capacidade[] }
-interface Mapa { id: string; versao: number; motivo: string | null; conteudo: Conteudo | null; impacto: { resumo?: string; mudancas?: string[] } | null; criadoEm: string; reposAnalisados: string[] }
+interface Mapa { id: string; versao: number; motivo: string | null; conteudo: Conteudo | null; impacto: { resumo?: string; mudancas?: string[] } | null; criadoEm: string; reposAnalisados: string[]; diagnostico?: string | null }
 interface Dados {
   semSquad?: boolean;
   podeEditar: boolean;
@@ -138,6 +138,9 @@ export default function Capacidades() {
               </select>
             )}
           </div>
+          {data.mapaAtual?.diagnostico && /Falhas:/.test(data.mapaAtual.diagnostico) && (
+            <div className="banner" style={{ marginBottom: 10 }}>⚠️ <span><b>Leitura dos repos:</b> {data.mapaAtual.diagnostico}. Verifique o token (env <code>GITHUB_TOKEN</code>) e o acesso ao repositório.</span></div>
+          )}
           {mapa.conteudo?.resumo && <Card pad style={{ marginBottom: 10 }}><p className="sub">{mapa.conteudo.resumo}</p></Card>}
           {mapa.impacto?.resumo && (
             <div className="banner" style={{ marginBottom: 10 }}>🔎 <span><b>Impacto:</b> {mapa.impacto.resumo}{mapa.impacto.mudancas?.length ? ` — ${mapa.impacto.mudancas.join("; ")}` : ""}</span></div>

@@ -29,9 +29,29 @@ async function ghGet(url: string, token?: string, raw = false): Promise<{ ok: bo
 const MANIFESTS = ["package.json", "pom.xml", "build.gradle", "go.mod", "requirements.txt", "Cargo.toml", "composer.json", "pyproject.toml"];
 const ANCHOR = /(^|\/)(main|index|app|application|server|api)\.(ts|js|py|go|java|kt|rb)$|controller|service|domain|handler|usecase|route/i;
 
-async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok: boolean; contexto: string }> {
-  const tree = await ghGet(`${GH}/repos/${nome}/git/trees/HEAD?recursive=1`, token);
-  if (!tree.ok) return { nome, ok: false, contexto: `Repositório ${nome}: não foi possível ler (HTTP ${tree.status}).` };
+function dicaErro(status: number): string {
+  if (status === 401) return "token inválido/expirado";
+  if (status === 403) return "sem permissão, rate limit ou SSO não autorizado";
+  if (status === 404) return "repo não encontrado ou sem acesso (token/escopo/SSO)";
+  if (status === 0) return "falha de rede";
+  return `HTTP ${status}`;
+}
+
+async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok: boolean; erro?: string; contexto: string }> {
+  // 1) metadados do repo (valida acesso e descobre o branch padrão)
+  const meta = await ghGet(`${GH}/repos/${nome}`, token);
+  if (!meta.ok) {
+    const erro = dicaErro(meta.status);
+    return { nome, ok: false, erro, contexto: `Repositório ${nome}: NÃO foi possível ler (${erro}).` };
+  }
+  let repo: any = {};
+  try { repo = JSON.parse(meta.text); } catch { /* */ }
+  const branch = repo.default_branch || "main";
+  const descricao = repo.description || "";
+  const lingua = repo.language || "";
+
+  // 2) árvore de arquivos pelo branch padrão (a API de trees não aceita "HEAD")
+  const tree = await ghGet(`${GH}/repos/${nome}/git/trees/${branch}?recursive=1`, token);
   let paths: string[] = [];
   try { paths = (JSON.parse(tree.text).tree ?? []).map((t: any) => t.path).filter(Boolean); } catch { /* */ }
   const dirsTopo = [...new Set(paths.filter((p) => p.includes("/")).map((p) => p.split("/")[0]))].slice(0, 30);
@@ -46,7 +66,8 @@ async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok
   for (const a of anchors) { const ar = await ghGet(`${GH}/repos/${nome}/contents/${a}`, token, true); if (ar.ok) anchorTxt += `\n--- ${a} ---\n${ar.text.slice(0, 1200)}`; }
 
   const contexto =
-    `Repositório ${nome}\nPastas de topo: ${dirsTopo.join(", ") || "-"}\nArquivos: ${paths.length}\n` +
+    `Repositório ${nome}\nDescrição: ${descricao || "-"}\nLinguagem: ${lingua || "-"}\n` +
+    `Pastas de topo: ${dirsTopo.join(", ") || "-"}\nArquivos: ${paths.length}\n` +
     `README:\n${readme || "(sem README)"}\nManifest (${manifestPath ?? "-"}):\n${manifest || "-"}\n` +
     `Arquivos-âncora:${anchorTxt || " (nenhum)"}`;
   return { nome, ok: true, contexto };
@@ -69,7 +90,7 @@ export async function analisarCapacidades(db: any, mapaId: string): Promise<void
     if (!repos.length) throw new Error("a squad não tem repositórios conectados");
 
     await setProgresso(db, mapaId, `Planejando a leitura de ${repos.length} repositório(s)…`);
-    const contextos: { nome: string; ok: boolean; contexto: string }[] = [];
+    const contextos: { nome: string; ok: boolean; erro?: string; contexto: string }[] = [];
     for (let i = 0; i < repos.length; i++) {
       await setProgresso(db, mapaId, `Lendo ${repos[i].nome} (${i + 1}/${repos.length})…`);
       contextos.push(await lerRepo(repos[i].nome, token));
@@ -98,12 +119,16 @@ export async function analisarCapacidades(db: any, mapaId: string): Promise<void
       maxTokens: 2500,
     });
 
+    const falhas = contextos.filter((c) => !c.ok);
+    const diagnostico = falhas.length
+      ? `${contextos.length - falhas.length}/${contextos.length} repos lidos. Falhas: ${falhas.map((f) => `${f.nome} (${f.erro})`).join("; ")}`
+      : `${contextos.length} repo(s) lido(s) com sucesso.`;
     await db.update(s.mapaCapacidade).set({
       status: "pronto",
       conteudo: plano,
       reposAnalisados: repos.map((r: any) => r.nome),
       impacto: plano?.impacto ?? null,
-      progresso: "concluído",
+      progresso: diagnostico,
       concluidoEm: new Date(),
     }).where(eq(s.mapaCapacidade.id, mapaId));
   } catch (e) {

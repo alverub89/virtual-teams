@@ -37,7 +37,7 @@ app.get("/", async (c) => {
     tokenViaEnv: !com?.githubToken && !!resolveGithubToken(com),
     repos: repos.map((r: any) => ({ id: r.id, nome: r.nome, linguagem: r.linguagem ?? null, url: r.url ?? null })),
     analisando: emAnalise ? { versao: emAnalise.versao, progresso: emAnalise.progresso, motivo: emAnalise.motivo } : null,
-    mapaAtual: atual ? { id: atual.id, versao: atual.versao, motivo: atual.motivo, conteudo: atual.conteudo, impacto: atual.impacto, criadoEm: atual.criadoEm, reposAnalisados: atual.reposAnalisados } : null,
+    mapaAtual: atual ? { id: atual.id, versao: atual.versao, motivo: atual.motivo, conteudo: atual.conteudo, impacto: atual.impacto, criadoEm: atual.criadoEm, reposAnalisados: atual.reposAnalisados, diagnostico: atual.progresso } : null,
     reposNovos,
     versoes: mapas.map((m: any) => ({ id: m.id, versao: m.versao, status: m.status, motivo: m.motivo, criadoEm: m.criadoEm })),
   });
