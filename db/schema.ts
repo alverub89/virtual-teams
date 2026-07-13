@@ -111,6 +111,12 @@ export const capacidade = aiWorkspace.table("capacidade", {
   nome: text("nome").notNull(),
   descricao: text("descricao"),
   sigla: text("sigla"), // sigla do sistema no catálogo (CMDB)
+  // Base de capacidades (arquitetura de negócio) — usada em outros lugares.
+  nivel: integer("nivel").notNull().default(1), // 1 (macro) | 2 (sub)
+  pai: text("pai"), // nome da capacidade L1 pai (quando nivel 2)
+  fluxoValor: text("fluxo_valor"),
+  repos: jsonb("repos").$type<string[]>().notNull().default([]),
+  origem: text("origem").notNull().default("manual"), // manual | ia
 });
 
 export const repositorio = aiWorkspace.table("repositorio", {

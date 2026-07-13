@@ -161,6 +161,25 @@ export async function analisarCapacidades(db: any, mapaId: string): Promise<void
       progresso: diagnostico,
       concluidoEm: new Date(),
     }).where(eq(s.mapaCapacidade.id, mapaId));
+
+    // Registra a análise na BASE de capacidades (reutilizável em outros lugares).
+    // Upsert por nome; não apaga as manuais nem as de IA fora deste mapa.
+    const capsPlano: any[] = Array.isArray(plano?.capacidades) ? plano.capacidades : [];
+    const existentes = (await db.select().from(s.capacidade)).filter((cp: any) => cp.squadId === mapa.squadId);
+    for (const cp of capsPlano) {
+      if (!cp?.nome) continue;
+      const ex = existentes.find((e: any) => String(e.nome).toLowerCase() === String(cp.nome).toLowerCase());
+      const vals = {
+        descricao: cp.descricao ?? null,
+        nivel: Number(cp.nivel) === 2 ? 2 : 1,
+        pai: cp.pai ?? null,
+        fluxoValor: cp.fluxoValor ?? null,
+        repos: Array.isArray(cp.repos) ? cp.repos : [],
+        origem: "ia",
+      };
+      if (ex) await db.update(s.capacidade).set(vals).where(eq(s.capacidade.id, ex.id));
+      else await db.insert(s.capacidade).values({ squadId: mapa.squadId, nome: cp.nome, ...vals });
+    }
   } catch (e) {
     await db.update(s.mapaCapacidade).set({ status: "erro", progresso: `erro: ${e instanceof Error ? e.message : e}` }).where(eq(s.mapaCapacidade.id, mapaId));
   }

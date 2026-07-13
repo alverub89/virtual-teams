@@ -30,8 +30,11 @@ app.get("/", async (c) => {
   const emAnalise = mapas.find((m: any) => m.status === "analisando");
   const atual = mapas.find((m: any) => m.status === "pronto");
   const reposNovos = atual ? repos.filter((r: any) => !(atual.reposAnalisados ?? []).includes(r.nome)).map((r: any) => r.nome) : [];
+  const base = (await db.select().from(s.capacidade)).filter((cp: any) => cp.squadId === me.squadId)
+    .map((cp: any) => ({ id: cp.id, nome: cp.nome, descricao: cp.descricao, nivel: cp.nivel ?? 1, pai: cp.pai ?? null, fluxoValor: cp.fluxoValor ?? null, repos: cp.repos ?? [], origem: cp.origem ?? "manual" }));
 
   return c.json({
+    base,
     podeEditar: podeEditar(me),
     temToken: !!resolveGithubToken(com),
     tokenViaEnv: !com?.githubToken && !!resolveGithubToken(com),
@@ -91,6 +94,53 @@ app.post("/testar-token", async (c) => {
   const token = resolveGithubToken(com);
   const repos = (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === me.squadId).map((r: any) => r.nome);
   return c.json(await testarToken(token, repos));
+});
+
+/* ---------- Base de capacidades: cadastro manual ---------- */
+const CapIn = z.object({
+  nome: z.string().min(2).max(120),
+  descricao: z.string().max(500).optional(),
+  nivel: z.union([z.literal(1), z.literal(2)]).default(1),
+  pai: z.string().optional().nullable(),
+  fluxoValor: z.string().optional().nullable(),
+  repos: z.array(z.string()).optional(),
+});
+
+app.post("/capacidade", async (c) => {
+  const me = c.get("me");
+  if (!podeEditar(me) || !me.squadId) return c.json({ error: "sem permissão" }, 403);
+  const body = CapIn.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const [cp] = await db.insert(s.capacidade).values({
+    squadId: me.squadId, nome: body.data.nome, descricao: body.data.descricao ?? null,
+    nivel: body.data.nivel, pai: body.data.pai ?? null, fluxoValor: body.data.fluxoValor ?? null,
+    repos: body.data.repos ?? [], origem: "manual",
+  }).returning();
+  await audit(me, "criar_capacidade", `cap:${body.data.nome}`);
+  return c.json(cp, 201);
+});
+
+app.put("/capacidade/:id", async (c) => {
+  const me = c.get("me");
+  if (!podeEditar(me) || !me.squadId) return c.json({ error: "sem permissão" }, 403);
+  const body = CapIn.partial().safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const [cp] = await db.select().from(s.capacidade).where(eq(s.capacidade.id, c.req.param("id")));
+  if (!cp || cp.squadId !== me.squadId) return c.json({ error: "não encontrada" }, 404);
+  await db.update(s.capacidade).set(body.data as any).where(eq(s.capacidade.id, cp.id));
+  return c.json({ ok: true });
+});
+
+app.delete("/capacidade/:id", async (c) => {
+  const me = c.get("me");
+  if (!podeEditar(me) || !me.squadId) return c.json({ error: "sem permissão" }, 403);
+  const db = await getDb();
+  const [cp] = await db.select().from(s.capacidade).where(eq(s.capacidade.id, c.req.param("id")));
+  if (!cp || cp.squadId !== me.squadId) return c.json({ error: "não encontrada" }, 404);
+  await db.delete(s.capacidade).where(eq(s.capacidade.id, cp.id));
+  return c.json({ ok: true });
 });
 
 app.post("/gerar", (c) => novaVersao(c, "inicial"));
