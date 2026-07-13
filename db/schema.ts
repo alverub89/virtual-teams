@@ -157,6 +157,7 @@ export const agente = aiWorkspace.table("agente", {
   promptSistema: text("prompt_sistema"), // override completo do prompt de sistema (quando definido, substitui o composto)
   origem: text("origem").notNull().default("manual"), // manual | bmad | ia
   ativo: boolean("ativo").notNull().default(true),
+  revisaoPendente: boolean("revisao_pendente").notNull().default(false), // IA: aguarda revisão humana antes de virar padrão
 });
 
 export const agenteTemplate = aiWorkspace.table("agente_template", {
@@ -190,6 +191,7 @@ export const skill = aiWorkspace.table("skill", {
   descricao: text("descricao"),
   instrucoes: text("instrucoes").notNull(),
   origem: text("origem").notNull().default("manual"), // manual | bmad | ia
+  revisaoPendente: boolean("revisao_pendente").notNull().default(false), // IA: aguarda revisão humana
 });
 
 /* ---------- acervo: templates e checklists (estilo BMAD) ---------- */
@@ -205,6 +207,7 @@ export const template = aiWorkspace.table("template", {
   comunidadeId: uuid("comunidade_id"),
   origem: text("origem").notNull().default("manual"), // manual | bmad | ia
   ativo: boolean("ativo").notNull().default(true),
+  revisaoPendente: boolean("revisao_pendente").notNull().default(false),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -219,6 +222,7 @@ export const checklist = aiWorkspace.table("checklist", {
   comunidadeId: uuid("comunidade_id"),
   origem: text("origem").notNull().default("manual"),
   ativo: boolean("ativo").notNull().default(true),
+  revisaoPendente: boolean("revisao_pendente").notNull().default(false),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 

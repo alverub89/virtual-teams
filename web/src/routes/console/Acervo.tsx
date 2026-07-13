@@ -5,7 +5,7 @@ import { api, del, post, put } from "../../lib/api";
 import { Button, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
-interface Item { id: string; nome: string; emoji: string | null; descricao?: string | null; origem: string }
+interface Item { id: string; nome: string; emoji: string | null; descricao?: string | null; origem: string; revisaoPendente?: boolean }
 interface AgenteItem extends Item { papel: string }
 interface Template extends Item { tipo: string; conteudo: string }
 interface Checklist extends Item { categoria: string; itens: string[] }
@@ -35,7 +35,12 @@ export default function Acervo() {
   const [descricao, setDescricao] = useState("");
   const gerarItem = useMutation({
     mutationFn: () => post("/console/acervo/gerar", { tipo, descricao }),
-    onSuccess: () => { inval(); qc.invalidateQueries({ queryKey: ["agentes"] }); setGerar(false); setDescricao(""); toast("✨ Item gerado e adicionado ao acervo"); },
+    onSuccess: () => { inval(); qc.invalidateQueries({ queryKey: ["agentes"] }); setGerar(false); setDescricao(""); toast("✨ Item gerado — em revisão pendente. Aprove para virar padrão."); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const revisar = useMutation({
+    mutationFn: (v: { tipo: string; id: string; decisao: "aprovar" | "descartar" }) => post(`/console/acervo/${v.tipo}/${v.id}/revisar`, { decisao: v.decisao }),
+    onSuccess: (_r, v) => { inval(); qc.invalidateQueries({ queryKey: ["agentes"] }); toast(v.decisao === "aprovar" ? "✅ Aprovado — já é padrão consumível" : "🗑️ Descartado"); },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
   const delTemplate = useMutation({ mutationFn: (id: string) => del(`/console/acervo/templates/${id}`), onSuccess: () => { inval(); toast("🗑️ Template removido"); } });
@@ -89,12 +94,43 @@ export default function Acervo() {
         </div>
       )}
 
+      {(() => {
+        const pend = [
+          ...(data?.agentes ?? []).filter((a) => a.revisaoPendente).map((a) => ({ ...a, tipo: "agente" })),
+          ...(data?.skills ?? []).filter((x) => x.revisaoPendente).map((x) => ({ ...x, tipo: "skill" })),
+          ...(data?.templates ?? []).filter((x) => x.revisaoPendente).map((x) => ({ ...x, tipo: "template" })),
+          ...(data?.checklists ?? []).filter((x) => x.revisaoPendente).map((x) => ({ ...x, tipo: "checklist" })),
+        ];
+        if (!pend.length) return null;
+        return (
+          <div className="card" style={{ marginBottom: 16, background: "#fffbeb", border: "1px solid #fde68a" }}>
+            <div className="card-pad" style={{ paddingBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>🕵️ Revisão pendente ({pend.length})</h3>
+              <p className="sub" style={{ margin: "4px 0 0" }}>Itens gerados por IA <b>não viram padrão</b> herdável pelas squads até você aprovar. Revise para evitar que uma alucinação vire padrão oficial.</p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 16px 14px" }}>
+              {pend.map((p) => (
+                <div key={`${p.tipo}-${p.id}`} className="card card-pad" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span>{p.emoji ?? "🤖"}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b>{p.nome}</b> <Chip tone="neutral">{p.tipo}</Chip>
+                    {p.descricao && <p className="sub" style={{ margin: "2px 0 0", fontSize: 12 }}>{p.descricao}</p>}
+                  </div>
+                  <Button variant="primary" onClick={() => revisar.mutate({ tipo: p.tipo, id: p.id, decisao: "aprovar" })}>✓ Aprovar</Button>
+                  <Button onClick={() => confirm(`Descartar "${p.nome}"?`) && revisar.mutate({ tipo: p.tipo, id: p.id, decisao: "descartar" })}>Descartar</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <Secao titulo={`Agentes (${data?.agentes.length ?? 0})`} extra={<Link to="/console/agentes" className="btn">Gerenciar agentes</Link>}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
           {data?.agentes.map((a) => (
             <Link key={a.id} to={`/console/agentes/${a.id}`} className="card" style={{ textDecoration: "none", color: "inherit" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-                <strong>{a.emoji ?? "🤖"} {a.nome}</strong><OrigemChip o={a.origem} />
+                <strong>{a.emoji ?? "🤖"} {a.nome}</strong><span style={{ display: "flex", gap: 4 }}>{a.revisaoPendente && <Chip tone="warn">⏳ revisão</Chip>}<OrigemChip o={a.origem} /></span>
               </div>
               <p className="sub" style={{ margin: "4px 0 0", fontSize: 12.5 }}>{a.papel}</p>
             </Link>
@@ -106,7 +142,7 @@ export default function Acervo() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {data?.skills.map((sk) => (
             <span key={sk.id} className="card" style={{ padding: "8px 12px", display: "inline-flex", gap: 8, alignItems: "center" }}>
-              {sk.emoji ?? "🧩"} {sk.nome} <OrigemChip o={sk.origem} />
+              {sk.emoji ?? "🧩"} {sk.nome} {sk.revisaoPendente && <Chip tone="warn">⏳ revisão</Chip>}<OrigemChip o={sk.origem} />
             </span>
           ))}
         </div>
@@ -117,7 +153,7 @@ export default function Acervo() {
           {data?.templates.map((t) => (
             <div key={t.id} className="card">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 6 }}>
-                <strong>{t.emoji ?? "📄"} {t.nome}</strong><OrigemChip o={t.origem} />
+                <strong>{t.emoji ?? "📄"} {t.nome}</strong><span style={{ display: "flex", gap: 4 }}>{t.revisaoPendente && <Chip tone="warn">⏳ revisão</Chip>}<OrigemChip o={t.origem} /></span>
               </div>
               <p className="sub" style={{ margin: "4px 0 8px", fontSize: 12.5 }}>{t.descricao}</p>
               <div style={{ display: "flex", gap: 6 }}>
@@ -134,7 +170,7 @@ export default function Acervo() {
           {data?.checklists.map((ck) => (
             <div key={ck.id} className="card">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 6 }}>
-                <strong>{ck.emoji ?? "✅"} {ck.nome}</strong><OrigemChip o={ck.origem} />
+                <strong>{ck.emoji ?? "✅"} {ck.nome}</strong><span style={{ display: "flex", gap: 4 }}>{ck.revisaoPendente && <Chip tone="warn">⏳ revisão</Chip>}<OrigemChip o={ck.origem} /></span>
               </div>
               <ul style={{ margin: "6px 0 8px", paddingLeft: 18, fontSize: 12.5 }}>
                 {ck.itens.slice(0, 6).map((it, i) => <li key={i} className="sub">{it}</li>)}
