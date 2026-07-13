@@ -762,4 +762,96 @@ app.post("/mcps/:id/gerar", cfg, async (c) => {
   return c.json({ ok: true, slug, endpoint: `${base}/api/mcp/${slug}`, tools: tools.length });
 });
 
+/* ---------- Playground: MCP real pronto para demonstração ---------- */
+
+// Estado do playground: o MCP vivo (se já provisionado) + o catálogo de MCPs
+// reais do mercado para o CTO navegar.
+app.get("/playground", async (c) => {
+  const db = await getDb();
+  const { PLAYGROUND_SLUG, PLAYGROUND_TOOLS, MARKET_MCPS } = await import("../_lib/playground");
+  const [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.slug, PLAYGROUND_SLUG));
+  const base = process.env.APP_URL ?? process.env.URL ?? "";
+  let mcp: any = null;
+  if (m) {
+    const exemplos = new Map(PLAYGROUND_TOOLS.map((t) => [t.nome, t.exemplo]));
+    const tools = (await db.select().from(s.tool))
+      .filter((t: any) => t.conexaoMcpId === m.id)
+      .map((t: any) => ({ ...t, exemplo: exemplos.get(t.nome) ?? {} }));
+    mcp = { ...m, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools };
+  }
+  const registrados = new Set((await db.select().from(s.conexaoMcp)).map((x: any) => x.nome));
+  return c.json({
+    provisionado: !!m,
+    mcp,
+    market: MARKET_MCPS.map((mm) => ({ ...mm, registrado: registrados.has(mm.nome) })),
+  });
+});
+
+// Provisiona (idempotente) o MCP do playground com tools reais e schemas prontos.
+app.post("/playground/provisionar", cfg, async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const { PLAYGROUND_SLUG, PLAYGROUND_MCP, PLAYGROUND_TOOLS } = await import("../_lib/playground");
+  const base = process.env.APP_URL ?? process.env.URL ?? "";
+
+  let [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.slug, PLAYGROUND_SLUG));
+  if (!m) {
+    [m] = await db
+      .insert(s.conexaoMcp)
+      .values({
+        nome: PLAYGROUND_MCP.nome,
+        sistema: PLAYGROUND_MCP.sistema,
+        descricao: PLAYGROUND_MCP.descricao,
+        proposito: PLAYGROUND_MCP.proposito,
+        escopo: "global",
+        comunidadeId: me.comunidadeId,
+        status: "conectado",
+        slug: PLAYGROUND_SLUG,
+        geradoEm: new Date(),
+      })
+      .returning();
+  }
+  const existentes = new Set((await db.select().from(s.tool)).filter((t: any) => t.conexaoMcpId === m.id).map((t: any) => t.nome));
+  const novas = PLAYGROUND_TOOLS.filter((t) => !existentes.has(t.nome));
+  if (novas.length)
+    await db.insert(s.tool).values(
+      novas.map((t) => ({
+        nome: t.nome,
+        descricao: t.descricao,
+        permissao: t.permissao,
+        conexaoMcpId: m.id,
+        execucao: t.execucao,
+        parametros: t.parametros,
+        inputSchema: t.inputSchema,
+        handlerConfig: t.handlerConfig,
+        comunidadeId: me.comunidadeId,
+      }))
+    );
+  await audit(me, "provisionar_playground", `mcp:${PLAYGROUND_SLUG}`, { toolsNovas: novas.length });
+  return c.json({ ok: true, slug: PLAYGROUND_SLUG, endpoint: `${base}/api/mcp/${PLAYGROUND_SLUG}`, toolsNovas: novas.length, total: PLAYGROUND_TOOLS.length });
+});
+
+// Registra um MCP do catálogo de mercado como conexão de referência (idempotente).
+app.post("/playground/registrar-mercado", cfg, async (c) => {
+  const me = c.get("me");
+  const body = (await c.req.json().catch(() => ({}))) as { nome?: string };
+  const { MARKET_MCPS } = await import("../_lib/playground");
+  const mm = MARKET_MCPS.find((x) => x.nome === body?.nome);
+  if (!mm) return c.json({ error: "MCP de mercado não encontrado" }, 404);
+  const db = await getDb();
+  const [existe] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.nome, mm.nome));
+  if (existe) return c.json({ ok: true, jaRegistrado: true });
+  await db.insert(s.conexaoMcp).values({
+    nome: mm.nome,
+    sistema: mm.sistema,
+    descricao: mm.descricao,
+    url: mm.url,
+    escopo: "global",
+    comunidadeId: me.comunidadeId,
+    status: "configurado",
+  });
+  await audit(me, "registrar_mcp_mercado", `mcp:${mm.nome}`);
+  return c.json({ ok: true });
+});
+
 export default app;

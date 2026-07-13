@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 // Primitivos do design system, recortados do protótipo (docs/spec, seção 4.0).
 
@@ -16,12 +16,14 @@ export function Card({
   children,
   pad = true,
   className = "",
+  style,
 }: {
   children: ReactNode;
   pad?: boolean;
   className?: string;
+  style?: CSSProperties;
 }) {
-  return <div className={`card ${pad ? "card-pad" : ""} ${className}`}>{children}</div>;
+  return <div className={`card ${pad ? "card-pad" : ""} ${className}`} style={style}>{children}</div>;
 }
 
 export function Button({

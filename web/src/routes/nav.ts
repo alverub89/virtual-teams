@@ -163,6 +163,13 @@ export const CONSOLE_NAV: NavSection[] = [
         description: "Conexões MCP, roteamento de modelos e consumo de tokens.",
         fase: "Fase 2",
       },
+      {
+        path: "/console/playground",
+        label: "Playground",
+        title: "Playground de MCP",
+        description: "MCP real pronto para demonstração + catálogo de MCPs do mercado.",
+        fase: "Fase 2",
+      },
     ],
   },
 ];
