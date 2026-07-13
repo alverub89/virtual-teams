@@ -105,6 +105,17 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
+// Planejamento de leitura de repositório: escolhe alguns arquivos da lista.
+function talvezPlanoLeitura(req: ChatRequest): string | null {
+  if (!/planeja a LEITURA de um reposit[oó]rio/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const lista = ultima.split("Arquivos (escolha só destes caminhos):\n")[1]?.split("\n\nFormato")[0] ?? "";
+  const paths = lista.split("\n").map((p) => p.trim()).filter(Boolean);
+  const pref = /(schema|migration|model|entit|route|controller|service|index|app|main|api)/i;
+  const escolhidos = [...paths.filter((p) => pref.test(p)), ...paths].filter((p, i, a) => a.indexOf(p) === i).slice(0, 10);
+  return JSON.stringify({ passos: escolhidos.map((path) => ({ path, motivo: "arquivo informativo para a documentação" })) });
+}
+
 // KB a partir de repositório: gera documentação plausível e ESPECÍFICA por tipo
 // (funcional, técnico, dados, api, operação) para a demo rodar sem gateway.
 function talvezKbRepo(req: ChatRequest): string | null {
@@ -154,6 +165,8 @@ function talvezKbRepo(req: ChatRequest): string | null {
 }
 
 function responder(req: ChatRequest): string {
+  const plano = talvezPlanoLeitura(req);
+  if (plano) return plano;
   const kb = talvezKbRepo(req);
   if (kb) return kb;
   const cap = talvezCapacidades(req);

@@ -54,28 +54,32 @@ function dicaErro(status: number): string {
   return `HTTP ${status}`;
 }
 
-export async function lerRepo(nome: string, token?: string, opts?: LerRepoOpts): Promise<RepoLido> {
-  const maxArq = opts?.maxArquivos ?? 5;
-  const maxCh = opts?.maxChars ?? 1200;
-  // 1) metadados do repo (valida acesso e descobre o branch padrão)
+export interface EstruturaRepo {
+  ok: boolean;
+  erro?: string;
+  meta?: { descricao: string; lingua: string; dirsTopo: string[]; arquivos: number; temReadme: boolean };
+  paths: string[];        // caminhos de arquivos (blobs) legíveis
+  readme: string;
+  manifest: string;
+  manifestPath?: string;
+}
+
+// Lê só a ESTRUTURA do repositório (metadados, árvore de arquivos, README,
+// manifest) — sem baixar o conteúdo dos arquivos. Base para planejar a leitura.
+export async function estruturaRepo(nome: string, token?: string): Promise<EstruturaRepo> {
   const meta = await ghGet(`${GH}/repos/${nome}`, token);
   if (!meta.ok) {
     let erro = dicaErro(meta.status);
-    // Refina o 404: o token é válido? de quem? — para dizer se falta acesso ou o token está ruim.
     if (meta.status === 404) {
       if (!token) {
         erro = "repo não encontrado ou privado (nenhum token configurado — defina GITHUB_TOKEN)";
       } else {
         const who = await ghGet(`${GH}/user`, token);
-        if (!who.ok) {
-          erro = `token não reconhecido pelo GitHub (${who.status}) — verifique se copiou inteiro/não expirou`;
-        } else {
-          let login = "?"; try { login = JSON.parse(who.text).login; } catch { /* */ }
-          erro = `token de "${login}" é válido, mas SEM acesso a ${nome} — se o repo é privado, use um classic com scope 'repo' OU inclua este repo num token fine-grained`;
-        }
+        if (!who.ok) erro = `token não reconhecido pelo GitHub (${who.status}) — verifique se copiou inteiro/não expirou`;
+        else { let login = "?"; try { login = JSON.parse(who.text).login; } catch { /* */ } erro = `token de "${login}" é válido, mas SEM acesso a ${nome} — se o repo é privado, use um classic com scope 'repo' OU inclua este repo num token fine-grained`; }
       }
     }
-    return { nome, ok: false, erro, contexto: `Repositório ${nome}: NÃO foi possível ler (${erro}).` };
+    return { ok: false, erro, paths: [], readme: "", manifest: "" };
   }
   let repo: any = {};
   try { repo = JSON.parse(meta.text); } catch { /* */ }
@@ -83,17 +87,14 @@ export async function lerRepo(nome: string, token?: string, opts?: LerRepoOpts):
   const descricao = repo.description || "";
   const lingua = repo.language || "";
 
-  // 2) árvore de arquivos pelo branch padrão (a API de trees não aceita "HEAD").
-  //    Só BLOBS (arquivos) — nunca diretórios (senão o "contents" devolve um
-  //    JSON de listagem que polui o contexto).
+  // Árvore pelo branch padrão (a API de trees não aceita "HEAD"). Só BLOBS
+  // (arquivos) — diretórios poluiriam a leitura com JSON de listagem.
   const tree = await ghGet(`${GH}/repos/${nome}/git/trees/${branch}?recursive=1`, token);
   let entries: { path: string; type: string; size?: number }[] = [];
   try { entries = (JSON.parse(tree.text).tree ?? []).filter((t: any) => t?.path); } catch { /* */ }
-  const blobs = entries.filter((t) => t.type === "blob");
+  const blobs = entries.filter((t) => t.type === "blob" && (t.size ?? 0) <= 120_000); // pula binários/enormes
   const paths = blobs.map((t) => t.path);
   const dirsTopo = [...new Set(paths.filter((p) => p.includes("/")).map((p) => p.split("/")[0]))].slice(0, 30);
-  const tamanho = new Map(blobs.map((t) => [t.path, t.size ?? 0]));
-  const legivel = (p: string) => (tamanho.get(p) ?? 0) <= 120_000; // pula binários/arquivos enormes
 
   const rm = await ghGet(`${GH}/repos/${nome}/readme`, token, true);
   const readme = rm.ok ? rm.text.slice(0, 4000) : "";
@@ -101,26 +102,57 @@ export async function lerRepo(nome: string, token?: string, opts?: LerRepoOpts):
   let manifest = "";
   if (manifestPath) { const mr = await ghGet(`${GH}/repos/${nome}/contents/${manifestPath}`, token, true); if (mr.ok) manifest = mr.text.slice(0, 2000); }
 
-  // Seleção de arquivos: primeiro o FOCO (ex.: schema/migração p/ doc de Dados),
-  // depois as âncoras genéricas — até maxArq no total, sem duplicar.
+  return { ok: true, meta: { descricao, lingua, dirsTopo, arquivos: paths.length, temReadme: !!readme }, paths, readme, manifest, manifestPath };
+}
+
+// Lê o conteúdo de arquivos específicos (um a um). Reporta progresso opcional.
+export async function lerArquivos(
+  nome: string,
+  token: string | undefined,
+  paths: string[],
+  maxChars = 2000,
+  onProgresso?: (path: string, i: number, total: number) => Promise<void> | void,
+): Promise<{ path: string; conteudo: string }[]> {
+  const out: { path: string; conteudo: string }[] = [];
+  for (let i = 0; i < paths.length; i++) {
+    if (onProgresso) await onProgresso(paths[i], i + 1, paths.length);
+    const ar = await ghGet(`${GH}/repos/${nome}/contents/${paths[i]}`, token, true);
+    if (ar.ok) out.push({ path: paths[i], conteudo: ar.text.slice(0, maxChars) });
+  }
+  return out;
+}
+
+// Seleção heurística de arquivos (fallback quando não há plano da IA): foco
+// (ex.: schema) primeiro, depois âncoras genéricas.
+export function selecionarArquivos(paths: string[], opts?: LerRepoOpts, excluir?: string): string[] {
+  const maxArq = opts?.maxArquivos ?? 5;
   const escolhidos: string[] = [];
-  const push = (p: string) => { if (!escolhidos.includes(p) && p !== manifestPath && legivel(p)) escolhidos.push(p); };
+  const push = (p: string) => { if (!escolhidos.includes(p) && p !== excluir) escolhidos.push(p); };
   if (opts?.foco) for (const p of paths) { if (escolhidos.length >= (opts.maxFoco ?? 6)) break; if (opts.foco.test(p)) push(p); }
   for (const p of paths) { if (escolhidos.length >= maxArq) break; if (ANCHOR.test(p)) push(p); }
+  return escolhidos;
+}
 
-  let arquivosTxt = "";
-  for (const a of escolhidos) {
-    const ar = await ghGet(`${GH}/repos/${nome}/contents/${a}`, token, true);
-    if (ar.ok) arquivosTxt += `\n--- ${a} ---\n${ar.text.slice(0, maxCh)}`;
-  }
+// Monta o texto de contexto a partir da estrutura + arquivos lidos.
+export function montarContexto(nome: string, est: EstruturaRepo, arquivos: { path: string; conteudo: string }[]): string {
+  const m = est.meta;
+  const arquivosTxt = arquivos.map((a) => `\n--- ${a.path} ---\n${a.conteudo}`).join("");
+  return (
+    `Repositório ${nome}\nDescrição: ${m?.descricao || "-"}\nLinguagem: ${m?.lingua || "-"}\n` +
+    `Pastas de topo: ${(m?.dirsTopo ?? []).join(", ") || "-"}\nArquivos: ${m?.arquivos ?? est.paths.length}\n` +
+    `Estrutura (amostra): ${est.paths.slice(0, 80).join(", ")}\n` +
+    `README:\n${est.readme || "(sem README)"}\nManifest (${est.manifestPath ?? "-"}):\n${est.manifest || "-"}\n` +
+    `Arquivos lidos:${arquivosTxt || " (nenhum)"}`
+  );
+}
 
-  const contexto =
-    `Repositório ${nome}\nDescrição: ${descricao || "-"}\nLinguagem: ${lingua || "-"}\n` +
-    `Pastas de topo: ${dirsTopo.join(", ") || "-"}\nArquivos: ${paths.length}\n` +
-    `Estrutura (amostra): ${paths.slice(0, 80).join(", ")}\n` +
-    `README:\n${readme || "(sem README)"}\nManifest (${manifestPath ?? "-"}):\n${manifest || "-"}\n` +
-    `Arquivos lidos:${arquivosTxt || " (nenhum)"}`;
-  return { nome, ok: true, contexto, meta: { descricao, lingua, dirsTopo, arquivos: paths.length, temReadme: !!readme } };
+// Leitura completa (compat.): estrutura + seleção heurística + conteúdo.
+export async function lerRepo(nome: string, token?: string, opts?: LerRepoOpts): Promise<RepoLido> {
+  const est = await estruturaRepo(nome, token);
+  if (!est.ok) return { nome, ok: false, erro: est.erro, contexto: `Repositório ${nome}: NÃO foi possível ler (${est.erro}).` };
+  const escolhidos = selecionarArquivos(est.paths, opts, est.manifestPath);
+  const arquivos = await lerArquivos(nome, token, escolhidos, opts?.maxChars ?? 1200);
+  return { nome, ok: true, contexto: montarContexto(nome, est, arquivos), meta: est.meta };
 }
 
 // Testa o token: quem é (login), se é válido, e o acesso a cada repo da squad.

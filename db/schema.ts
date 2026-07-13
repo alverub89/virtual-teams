@@ -331,6 +331,8 @@ export const kbArtigo = aiWorkspace.table("kb_artigo", {
   editadoPor: uuid("editado_por"),
   editadoNome: text("editado_nome"),
   editadoEm: timestamp("editado_em", { withTimezone: true }),
+  // Checklist de leitura planejado pela IA (o que ler no repo) + progresso.
+  plano: jsonb("plano").$type<{ path: string; motivo: string; lido: boolean }[] | null>(),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -5,7 +5,7 @@
 
 import { eq, inArray } from "drizzle-orm";
 import { schema as s } from "../../../db/client";
-import { lerRepo, resolveGithubToken, SCHEMA, type RepoLido } from "./capacidades";
+import { estruturaRepo, lerArquivos, montarContexto, selecionarArquivos, resolveGithubToken, SCHEMA, type EstruturaRepo } from "./capacidades";
 
 // Catálogo de tipos de documento gerados por repositório. `padrao` = marcado
 // por default na UI. Cada tipo tem um FOCO específico para a síntese da IA.
@@ -64,9 +64,9 @@ async function sintetizar(repo: string, foco: string, contexto: string): Promise
 
 // Fallback LIMPO quando a síntese por IA não conclui: usa os metadados lidos,
 // nunca despeja o contexto cru (que contém JSON de API).
-function fallbackDoc(tipoEmoji: string, tipoLabel: string, repo: string, lido: RepoLido): string {
-  if (!lido.ok) return `# ${tipoEmoji} ${tipoLabel} — ${repo}\n\n> ⚠️ Não foi possível ler o repositório: ${lido.erro}.\n\nVerifique o token do GitHub e use **Regenerar**.`;
-  const m = lido.meta;
+function fallbackDoc(tipoEmoji: string, tipoLabel: string, repo: string, est: EstruturaRepo): string {
+  if (!est.ok) return `# ${tipoEmoji} ${tipoLabel} — ${repo}\n\n> ⚠️ Não foi possível ler o repositório: ${est.erro}.\n\nVerifique o token do GitHub e use **Regenerar**.`;
+  const m = est.meta;
   return (
     `# ${tipoEmoji} ${tipoLabel} — ${repo}\n\n` +
     `> ⚠️ A síntese por IA não pôde ser concluída agora. Abaixo, o que foi lido do repositório. Use **Regenerar** para tentar de novo.\n\n` +
@@ -77,6 +77,41 @@ function fallbackDoc(tipoEmoji: string, tipoLabel: string, repo: string, lido: R
   );
 }
 
+// A IA PLANEJA a leitura: dada a estrutura do repo e os tipos de documento a
+// produzir, escolhe um checklist de arquivos a ler (com o motivo de cada um).
+// Fallback heurístico se a IA falhar. Bounded a ~14 arquivos.
+async function planejarLeitura(repo: string, est: EstruturaRepo, tiposLabels: string[]): Promise<{ path: string; motivo: string }[]> {
+  const validos = new Set(est.paths);
+  try {
+    const { gerarJson } = await import("./aigen");
+    const plano = await gerarJson({
+      tarefa: "arquitetura",
+      system:
+        "Você planeja a LEITURA de um repositório para documentá-lo. Dada a lista de arquivos, escolha os arquivos MAIS INFORMATIVOS " +
+        "para produzir a documentação pedida (entrypoints, rotas/controllers, serviços de domínio, modelos/schema/migrações, config). " +
+        "Priorize amplitude de áreas. Escolha no máximo 14. Responda SOMENTE JSON.",
+      instrucao:
+        `Repositório: ${repo}\nDocumentos a produzir: ${tiposLabels.join(", ")}\n` +
+        `Linguagem: ${est.meta?.lingua || "-"}\nPastas de topo: ${(est.meta?.dirsTopo ?? []).join(", ")}\n` +
+        `Manifest:\n${est.manifest || "-"}\n\nArquivos (escolha só destes caminhos):\n${est.paths.slice(0, 400).join("\n")}\n\n` +
+        'Formato JSON: { "passos": [{ "path": "caminho/exato/do/arquivo", "motivo": "por que ler" }] }',
+      maxTokens: 1500,
+    });
+    const passos = Array.isArray(plano?.passos) ? plano.passos : [];
+    const limpos = passos
+      .filter((p: any) => p?.path && validos.has(p.path))
+      .map((p: any) => ({ path: String(p.path), motivo: String(p.motivo ?? "").slice(0, 140) }))
+      .slice(0, 14);
+    // dedup por path
+    const vistos = new Set<string>();
+    const dedup = limpos.filter((p: any) => (vistos.has(p.path) ? false : (vistos.add(p.path), true)));
+    if (dedup.length) return dedup;
+  } catch { /* cai no heurístico */ }
+  // Fallback heurístico: schema + âncoras.
+  const escolhidos = selecionarArquivos(est.paths, { maxArquivos: 12, foco: SCHEMA, maxFoco: 6 }, est.manifestPath);
+  return escolhidos.map((path) => ({ path, motivo: "arquivo relevante (seleção automática)" }));
+}
+
 // Gera um LOTE de documentos (vários tipos) para o mesmo repositório: lê o repo
 // uma vez e sintetiza cada artigo. Cada artigo falha isoladamente.
 export async function gerarKbDeRepoGrupo(db: any, artigoIds: string[]): Promise<void> {
@@ -85,30 +120,50 @@ export async function gerarKbDeRepoGrupo(db: any, artigoIds: string[]): Promise<
   if (!arts.length) return;
   const repo = arts[0].repo as string;
 
+  const ids = arts.map((a: any) => a.id);
+  const setTodos = (vals: any) => db.update(s.kbArtigo).set(vals).where(inArray(s.kbArtigo.id, ids));
   try {
     const [sq] = await db.select().from(s.squad).where(eq(s.squad.id, arts[0].squadId));
     const [rt] = sq ? await db.select().from(s.releaseTrain).where(eq(s.releaseTrain.id, sq.releaseTrainId)) : [];
     const [com] = rt ? await db.select().from(s.comunidade).where(eq(s.comunidade.id, rt.comunidadeId)) : [];
     const token = resolveGithubToken(com);
 
-    for (const a of arts) await db.update(s.kbArtigo).set({ progresso: `Lendo ${repo}…` }).where(eq(s.kbArtigo.id, a.id));
-    // Leitura PROFUNDA (uma vez para todos os docs): mais arquivos e maiores,
-    // priorizando schema/migração/model (essencial para o doc de Dados).
-    const precisaDados = arts.some((a: any) => a.tipoDoc === "dados");
-    const lido = await lerRepo(repo, token, {
-      maxArquivos: 12,
-      maxChars: 2200,
-      foco: precisaDados ? SCHEMA : undefined,
-      maxFoco: precisaDados ? 6 : 0,
-    });
+    // 1) Estrutura do repositório (árvore de arquivos).
+    await setTodos({ progresso: `Lendo a estrutura de ${repo}…`, plano: null });
+    const est = await estruturaRepo(repo, token);
+    if (!est.ok) {
+      for (const a of arts) {
+        const tipo = tipoDe(a.tipoDoc);
+        await db.update(s.kbArtigo).set({ status: "pronto", conteudo: fallbackDoc(tipo.emoji, tipo.label, repo, est), progresso: `não foi possível ler: ${est.erro}` }).where(eq(s.kbArtigo.id, a.id));
+      }
+      return;
+    }
 
+    // 2) A IA PLANEJA o checklist de leitura (o que ver no repo).
+    await setTodos({ progresso: "Planejando o que ler no repositório…" });
+    const tiposLabels = arts.map((a: any) => tipoDe(a.tipoDoc).label);
+    const passos = await planejarLeitura(repo, est, tiposLabels);
+    const checklist = passos.map((p) => ({ ...p, lido: false }));
+    await setTodos({ plano: checklist, progresso: `Vou ler ${checklist.length} arquivo(s)…` });
+
+    // 3) Executa o checklist: lê cada arquivo, marca como lido, segue.
+    const arquivos = await lerArquivos(repo, token, passos.map((p) => p.path), 2400, async (path, i, total) => {
+      const atual = checklist.map((c) => (c.path === path ? { ...c, lido: true } : c));
+      // marca lidos os anteriores também (ordem sequencial)
+      for (let k = 0; k < i - 1; k++) atual[k].lido = true;
+      await setTodos({ plano: atual, progresso: `Lendo ${path} (${i}/${total})…` });
+    });
+    const checklistFinal = checklist.map((c) => ({ ...c, lido: arquivos.some((a) => a.path === c.path) }));
+    const contexto = montarContexto(repo, est, arquivos);
+
+    // 4) Sintetiza cada documento a partir do contexto reunido.
     for (const a of arts) {
       const tipo = tipoDe(a.tipoDoc);
-      await db.update(s.kbArtigo).set({ progresso: `Sintetizando documentação ${tipo.label.toLowerCase()}…` }).where(eq(s.kbArtigo.id, a.id));
-      const doc = await sintetizar(repo, tipo.foco, lido.contexto);
-      const markdown = doc?.markdown || fallbackDoc(tipo.emoji, tipo.label, repo, lido);
+      await db.update(s.kbArtigo).set({ progresso: `Sintetizando documentação ${tipo.label.toLowerCase()}…`, plano: checklistFinal }).where(eq(s.kbArtigo.id, a.id));
+      const doc = await sintetizar(repo, tipo.foco, contexto);
+      const markdown = doc?.markdown || fallbackDoc(tipo.emoji, tipo.label, repo, est);
       const resumo = doc?.resumo || `Documentação ${tipo.label.toLowerCase()} de ${repo}.`;
-      const diag = lido.ok ? (doc ? null : "síntese por IA indisponível — use Regenerar") : `leitura parcial de ${repo}: ${lido.erro}`;
+      const diag = doc ? null : "síntese por IA indisponível — use Regenerar";
       await db.update(s.kbArtigo).set({ status: "pronto", conteudo: markdown, resumo: resumo.slice(0, 280), progresso: diag }).where(eq(s.kbArtigo.id, a.id));
     }
   } catch (e) {

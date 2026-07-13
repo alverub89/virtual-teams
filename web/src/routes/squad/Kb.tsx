@@ -22,6 +22,7 @@ interface Artigo {
   autorId?: string | null;
   editadoNome?: string | null;
   editadoEm?: string | null;
+  plano?: { path: string; motivo: string; lido: boolean }[] | null;
 }
 interface TipoDoc { key: string; label: string; emoji: string; padrao: boolean }
 interface ReposDisp { repos: { id: string; nome: string; linguagem: string | null }[]; temToken: boolean; tiposDoc: TipoDoc[] }
@@ -307,10 +308,26 @@ export function KbArtigo() {
           </div>
         )}
         {artigo.status === "gerando" ? (
-          <div className="card" style={{ textAlign: "center", padding: 28 }}>
-            <div style={{ fontSize: 30 }}>⏳</div>
-            <h3 style={{ margin: "8px 0 4px" }}>Gerando documentação…</h3>
-            <p className="sub">{artigo.progresso ?? "Lendo o repositório e sintetizando o artigo."}</p>
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 30 }}>⏳</div>
+              <h3 style={{ margin: "8px 0 4px" }}>Gerando documentação…</h3>
+              <p className="sub">{artigo.progresso ?? "Planejando a leitura do repositório."}</p>
+            </div>
+            {!!artigo.plano?.length && (
+              <div style={{ marginTop: 16, maxWidth: 620, marginInline: "auto" }}>
+                <div className="sub" style={{ fontSize: 12.5, marginBottom: 6 }}>Plano de leitura da IA</div>
+                {artigo.plano.map((p) => (
+                  <div key={p.path} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", opacity: p.lido ? 1 : 0.6 }}>
+                    <span>{p.lido ? "✅" : "⬜"}</span>
+                    <div>
+                      <code style={{ fontSize: 12.5 }}>{p.path}</code>
+                      {p.motivo && <div className="sub" style={{ fontSize: 11.5 }}>{p.motivo}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <>
