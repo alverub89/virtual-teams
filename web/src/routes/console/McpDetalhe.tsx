@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, del, post } from "../../lib/api";
 import { Button, Card, Chip, Fld, Modal, PageHead } from "../../components/ui";
+import { RemoteMcpTester } from "../../components/RemoteMcp";
 import { useToast } from "../../lib/toast";
 
 interface Tool {
@@ -23,6 +24,7 @@ interface McpDet {
   descricao: string | null;
   escopo: string;
   slug: string | null;
+  url: string | null;
   proposito: string | null;
   geradoEm: string | null;
   endpoint: string | null;
@@ -134,6 +136,12 @@ export default function McpDetalhe() {
           </ol>
         </Card>
       </div>
+
+      {mcp.url && (
+        <div style={{ marginBottom: 8 }}>
+          <RemoteMcpTester url={mcp.url} />
+        </div>
+      )}
 
       <div className="sec-title">Tools registradas</div>
       {mcp.tools.length === 0 && <p className="empty-note">Nenhuma tool ainda. Comece por <b>+ Nova tool</b>.</p>}

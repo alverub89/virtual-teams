@@ -143,6 +143,40 @@ export interface MarketMcp {
   categoria: string;
 }
 
+// MCPs remotos REAIS e públicos (sem auth) — dá para registrar a URL e o app,
+// agindo como cliente MCP, conecta e chama as tools de verdade.
+export interface RemoteMcp {
+  nome: string;
+  sistema: string;
+  url: string;
+  descricao: string;
+  dica: string; // exemplo de uso para a demo
+}
+
+export const REMOTE_MCPS: RemoteMcp[] = [
+  {
+    nome: "DeepWiki",
+    sistema: "deepwiki",
+    url: "https://mcp.deepwiki.com/mcp",
+    descricao: "Pergunta em linguagem natural sobre qualquer repositório público do GitHub (docs geradas).",
+    dica: "tool ask_question com { repoName: 'facebook/react', question: 'o que é o hook useState?' }",
+  },
+  {
+    nome: "Context7",
+    sistema: "context7",
+    url: "https://mcp.context7.com/mcp",
+    descricao: "Documentação atualizada de bibliotecas e frameworks, pronta para LLM.",
+    dica: "resolve-library-id + get-library-docs para a lib desejada",
+  },
+  {
+    nome: "GitMCP (servers)",
+    sistema: "gitmcp",
+    url: "https://gitmcp.io/modelcontextprotocol/servers",
+    descricao: "MCP instantâneo sobre a documentação de um repositório GitHub (aqui: modelcontextprotocol/servers).",
+    dica: "fetch_documentation / search_documentation",
+  },
+];
+
 export const MARKET_MCPS: MarketMcp[] = [
   { nome: "GitHub", sistema: "github", categoria: "DevOps", url: "https://github.com/github/github-mcp-server", descricao: "Servidor MCP oficial do GitHub: issues, pull requests, Actions e repositórios." },
   { nome: "Filesystem", sistema: "filesystem", categoria: "Reference", url: "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem", descricao: "Operações de arquivo seguras com controle de acesso configurável (servidor de referência)." },

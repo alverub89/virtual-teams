@@ -762,13 +762,31 @@ app.post("/mcps/:id/gerar", cfg, async (c) => {
   return c.json({ ok: true, slug, endpoint: `${base}/api/mcp/${slug}`, tools: tools.length });
 });
 
+/* ---------- Cliente MCP: conectar e testar um servidor MCP externo ---------- */
+
+// Conecta (como cliente) a um servidor MCP remoto e lista as tools reais dele.
+app.post("/mcp-client/tools", cfg, async (c) => {
+  const { url } = (await c.req.json().catch(() => ({}))) as { url?: string };
+  if (!url || !/^https?:\/\//.test(url)) return c.json({ ok: false, erro: "informe uma URL http(s) do servidor MCP" }, 400);
+  const { listarToolsRemoto } = await import("../_lib/mcpclient");
+  return c.json(await listarToolsRemoto(url));
+});
+
+// Chama uma tool de um servidor MCP remoto (tools/call) e devolve o resultado.
+app.post("/mcp-client/call", cfg, async (c) => {
+  const { url, name, arguments: args } = (await c.req.json().catch(() => ({}))) as { url?: string; name?: string; arguments?: Record<string, unknown> };
+  if (!url || !name) return c.json({ ok: false, erro: "url e name são obrigatórios" }, 400);
+  const { chamarToolRemoto } = await import("../_lib/mcpclient");
+  return c.json(await chamarToolRemoto(url, name, args ?? {}));
+});
+
 /* ---------- Playground: MCP real pronto para demonstração ---------- */
 
 // Estado do playground: o MCP vivo (se já provisionado) + o catálogo de MCPs
 // reais do mercado para o CTO navegar.
 app.get("/playground", async (c) => {
   const db = await getDb();
-  const { PLAYGROUND_SLUG, PLAYGROUND_TOOLS, MARKET_MCPS } = await import("../_lib/playground");
+  const { PLAYGROUND_SLUG, PLAYGROUND_TOOLS, MARKET_MCPS, REMOTE_MCPS } = await import("../_lib/playground");
   const [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.slug, PLAYGROUND_SLUG));
   const base = process.env.APP_URL ?? process.env.URL ?? "";
   let mcp: any = null;
@@ -783,6 +801,7 @@ app.get("/playground", async (c) => {
   return c.json({
     provisionado: !!m,
     mcp,
+    remotos: REMOTE_MCPS.map((rm) => ({ ...rm, registrado: registrados.has(rm.nome) })),
     market: MARKET_MCPS.map((mm) => ({ ...mm, registrado: registrados.has(mm.nome) })),
   });
 });
@@ -835,9 +854,9 @@ app.post("/playground/provisionar", cfg, async (c) => {
 app.post("/playground/registrar-mercado", cfg, async (c) => {
   const me = c.get("me");
   const body = (await c.req.json().catch(() => ({}))) as { nome?: string };
-  const { MARKET_MCPS } = await import("../_lib/playground");
-  const mm = MARKET_MCPS.find((x) => x.nome === body?.nome);
-  if (!mm) return c.json({ error: "MCP de mercado não encontrado" }, 404);
+  const { MARKET_MCPS, REMOTE_MCPS } = await import("../_lib/playground");
+  const mm = [...REMOTE_MCPS, ...MARKET_MCPS].find((x) => x.nome === body?.nome);
+  if (!mm) return c.json({ error: "MCP não encontrado no catálogo" }, 404);
   const db = await getDb();
   const [existe] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.nome, mm.nome));
   if (existe) return c.json({ ok: true, jaRegistrado: true });

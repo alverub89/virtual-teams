@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post } from "../../lib/api";
-import { Button, Card, Chip, PageHead } from "../../components/ui";
+import { Button, Card, Chip, Fld, PageHead } from "../../components/ui";
+import { RemoteMcpTester } from "../../components/RemoteMcp";
 import { useToast } from "../../lib/toast";
 
 interface Tool {
@@ -15,9 +16,11 @@ interface Tool {
   exemplo: Record<string, unknown>;
 }
 interface MarketMcp { nome: string; sistema: string; url: string; descricao: string; categoria: string; registrado: boolean }
+interface RemoteMcp { nome: string; sistema: string; url: string; descricao: string; dica: string; registrado: boolean }
 interface Estado {
   provisionado: boolean;
   mcp: { nome: string; proposito: string | null; endpoint: string | null; tools: Tool[] } | null;
+  remotos: RemoteMcp[];
   market: MarketMcp[];
 }
 
@@ -97,6 +100,8 @@ export default function Playground() {
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
+  const [conectarUrl, setConectarUrl] = useState<string | null>(null);
+  const [urlManual, setUrlManual] = useState("");
   const categorias = [...new Set((data?.market ?? []).map((m) => m.categoria))];
 
   return (
@@ -153,6 +158,45 @@ export default function Playground() {
             {data.mcp.tools.map((t) => <ToolRunner key={t.id} tool={t} />)}
           </div>
         </>
+      )}
+
+      <div className="sec-title" style={{ marginTop: 18 }}>MCPs remotos — conecte e teste de verdade</div>
+      <div className="banner" style={{ marginBottom: 10 }}>
+        🔗 <span>Servidores MCP remotos <b>públicos e sem chave</b>. Registre a URL e clique em <b>Conectar</b> — o app age como <b>cliente MCP</b> (initialize + tools/list + tools/call) e traz as tools reais do servidor.</span>
+      </div>
+      <div className="grid g3">
+        {data?.remotos.map((m) => (
+          <Card key={m.nome} pad>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <h3 style={{ flex: 1 }}>{m.nome}</h3>
+              {m.registrado && <Chip tone="good">registrado</Chip>}
+            </div>
+            <p className="sub" style={{ minHeight: 38 }}>{m.descricao}</p>
+            <p className="sub" style={{ fontSize: 11.5 }}><b>Ex.:</b> {m.dica}</p>
+            <div className="prompt-box" style={{ fontSize: 11, userSelect: "all", margin: "6px 0" }}>{m.url}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Button variant="primary" onClick={() => setConectarUrl(m.url)}>Conectar</Button>
+              {!m.registrado && <Button onClick={() => registrar.mutate(m.nome)}>Registrar</Button>}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Card pad style={{ marginTop: 10 }}>
+        <h3>Conectar por URL</h3>
+        <p className="sub">Cole a URL de qualquer servidor MCP (transporte Streamable HTTP) para conectar e testar.</p>
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <Fld label="URL do servidor MCP"><input className="in" value={urlManual} onChange={(e) => setUrlManual(e.target.value)} placeholder="https://mcp.exemplo.com/mcp" /></Fld>
+          </div>
+          <Button variant="primary" onClick={() => urlManual.startsWith("http") && setConectarUrl(urlManual)}>Conectar</Button>
+        </div>
+      </Card>
+
+      {conectarUrl && (
+        <div style={{ marginTop: 10 }}>
+          <RemoteMcpTester key={conectarUrl} url={conectarUrl} />
+        </div>
       )}
 
       <div className="sec-title" style={{ marginTop: 18 }}>MCPs disponíveis no mercado</div>
