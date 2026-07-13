@@ -83,6 +83,38 @@ app.get("/overview", async (c) => {
   });
 });
 
+// Trilha de auditoria completa (quem fez o quê, quando) — versionamento das
+// mudanças de plataforma: métodos, agentes, decisões, orçamentos, runs.
+app.get("/auditoria", rbac("configurar_plataforma"), async (c) => {
+  const db = await getDb();
+  const filtro = c.req.query("q")?.toLowerCase().trim();
+  const limit = Math.min(500, Math.max(1, parseInt(c.req.query("limit") ?? "200", 10) || 200));
+  let linhas = (await db.select().from(s.auditLog))
+    .sort((a: any, b: any) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
+  if (filtro) {
+    linhas = linhas.filter((l: any) =>
+      [l.acao, l.alvo, l.pessoaNome].filter(Boolean).some((v: string) => v.toLowerCase().includes(filtro))
+    );
+  }
+  // Famílias de ação para os filtros rápidos do front.
+  const familia = (acao: string) =>
+    /metodo/.test(acao) ? "método" : /agente|skill|tool|blueprint|mcp/.test(acao) ? "agente/config"
+      : /run|orquestr|checkpoint/.test(acao) ? "orquestração" : /budget|token/.test(acao) ? "orçamento"
+      : /aprov|reprov|decis|convite/.test(acao) ? "decisões" : "outros";
+  return c.json({
+    total: linhas.length,
+    linhas: linhas.slice(0, limit).map((l: any) => ({
+      id: l.id,
+      pessoaNome: l.pessoaNome,
+      acao: l.acao,
+      alvo: l.alvo,
+      familia: familia(l.acao),
+      detalhe: l.detalhe,
+      criadoEm: l.criadoEm,
+    })),
+  });
+});
+
 /* ---------- agentes, skills & tools ---------- */
 
 app.get("/agentes", async (c) => {
@@ -549,7 +581,10 @@ app.put("/metodos/:id", cfg, async (c) => {
   if (d.escopo) { campos.escopo = d.escopo; campos.comunidadeId = d.escopo === "comunidade" ? d.comunidadeId ?? me.comunidadeId : null; }
   if (Object.keys(campos).length) await db.update(s.metodo).set(campos).where(eq(s.metodo.id, id));
   if (d.etapas && d.etapas.length) await gravarEtapas(db, id, d.etapas as any);
-  await audit(me, "editar_metodo", `metodo:${id}`);
+  await audit(me, "editar_metodo", `metodo:${id}`, {
+    campos: Object.keys(campos),
+    etapas: d.etapas?.length ?? undefined,
+  });
   return c.json({ ok: true });
 });
 

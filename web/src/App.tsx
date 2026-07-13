@@ -33,6 +33,7 @@ import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plata
 import McpDetalhe from "./routes/console/McpDetalhe";
 import Playground from "./routes/console/Playground";
 import Aprovacoes from "./routes/console/Aprovacoes";
+import Auditoria from "./routes/console/Auditoria";
 import PopularDemo from "./routes/PopularDemo";
 import Indicadores from "./routes/gestao/Indicadores";
 import { DocsComunidade, DocsFeatures } from "./routes/gestao/DocsGestao";
@@ -111,6 +112,7 @@ export default function App() {
             <Route path="/console/mcps/:id" element={<McpDetalhe />} />
             <Route path="/console/playground" element={<Playground />} />
             <Route path="/console/aprovacoes" element={<Aprovacoes />} />
+            <Route path="/console/auditoria" element={<Auditoria />} />
           </Route>
           </Route>
 

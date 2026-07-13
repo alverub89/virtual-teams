@@ -212,6 +212,13 @@ export const CONSOLE_NAV: NavSection[] = [
         description: "Tools e MCPs publicados pelas squads, aguardando o CTO.",
         fase: "Fase 2",
       },
+      {
+        path: "/console/auditoria",
+        label: "Auditoria",
+        title: "Trilha de auditoria",
+        description: "Quem fez o quê e quando — cada mudança de plataforma versionada.",
+        fase: "Fase 2",
+      },
     ],
   },
 ];

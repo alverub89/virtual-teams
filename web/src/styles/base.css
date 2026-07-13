@@ -31,6 +31,11 @@ main { flex: 1; overflow-y: auto; min-width: 0; }
 .avatar { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #fff; flex-shrink: 0; }
 .env-chip { font-size: 11px; color: var(--sidebar-ink-2); border: 1px solid #4a463f; padding: 3px 10px; border-radius: 99px; }
 
+/* botões de filtro tipo chip */
+.chip-btn { font-size: 12px; padding: 4px 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent-soft-2); }
+.chip-btn.on { background: var(--accent-soft); border-color: var(--accent-soft-2); color: #9c4a00; font-weight: 600; }
+
 /* barra de auditoria (CTO auditando uma squad) */
 .audit-bar { display: flex; align-items: center; gap: 10px; padding: 7px 16px; font-size: 12.5px; background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #7c2d12; flex-shrink: 0; }
 .audit-bar.on { background: #fef3c7; border-bottom-color: #fcd34d; }
