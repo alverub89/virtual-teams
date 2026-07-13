@@ -220,7 +220,24 @@ function cfgDaEtapa(ordem: number, nome: string) {
 // Contexto que "transborda" entre etapas: os documentos já gerados nas etapas
 // anteriores da iniciativa. Cada etapa constrói sobre a anterior (o PRD parte
 // do Brief, a Arquitetura parte do PRD, etc.) em vez de recomeçar do zero.
+// Contexto do PRODUTO EXISTENTE da squad: repositórios conectados, capacidades
+// já mapeadas e a documentação do código (KB gerada dos repos). Serve para os
+// agentes NÃO recriarem o que já existe (ex.: login que o repo já tem).
+async function contextoProduto(db: any, squadId: string | null | undefined): Promise<string> {
+  if (!squadId) return "";
+  const repos = (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === squadId);
+  const caps = (await db.select().from(s.capacidade)).filter((c: any) => c.squadId === squadId);
+  const kb = (await db.select().from(s.kbArtigo)).filter((a: any) => a.squadId === squadId && a.origem === "ia" && (a.status ?? "pronto") === "pronto").slice(0, 4);
+  if (!repos.length && !caps.length && !kb.length) return "";
+  const linhas: string[] = ["PRODUTO EXISTENTE — o que JÁ existe no código/negócio. NÃO recrie o que já existe: reutilize, construa sobre isto ou integre."];
+  if (repos.length) linhas.push(`Repositórios conectados: ${repos.map((r: any) => r.nome + (r.linguagem ? ` (${r.linguagem})` : "")).join(", ")}`);
+  if (caps.length) linhas.push(`Capacidades já mapeadas: ${caps.map((c: any) => c.nome).join(", ")}`);
+  for (const a of kb) linhas.push(`Documentação do código — ${a.titulo}:\n${String(a.conteudo ?? a.resumo ?? "").slice(0, 1200)}`);
+  return linhas.join("\n\n");
+}
+
 async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 2800): Promise<string> {
+  const produto = await contextoProduto(db, ini.squadId);
   // Docs da jornada (brief, PRD, arquitetura, histórias…). Exclui os SDDs — são
   // derivados por história e inflariam/diluiriam o contexto das etapas.
   const docs = (await db
@@ -229,9 +246,8 @@ async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 2800
     .where(eq(s.documento.iniciativaId, ini.id))
     .orderBy(asc(s.documento.criadoEm)))
     .filter((d: any) => d.tipo !== "sdd");
-  if (!docs.length) return "";
   const TOTAL = 16000; // orçamento total para não estourar o prompt
-  let usado = 0;
+  let usado = produto.length;
   const partes: string[] = [];
   for (const d of docs) {
     const corpo = (d.conteudo ?? "").slice(0, maxCharsPorDoc);
@@ -243,7 +259,7 @@ async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 2800
     usado += corpo.length;
     partes.push(`### ${d.emoji ?? "📄"} ${d.titulo}\n${corpo}`);
   }
-  return partes.join("\n\n");
+  return [produto, ...partes].filter(Boolean).join("\n\n");
 }
 
 // GERAÇÃO ITERATIVA DE HISTÓRIAS (etapa 4): a IA primeiro identifica os ÉPICOS
@@ -729,29 +745,51 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
 async function gerarSddDaHistoria(db: any, ini: any, h: any, autorNome: string): Promise<any> {
   const contexto = await contextoEtapasAnteriores(db, ini);
   const criterios = (h.criteriosAceite ?? []).map((x: string) => `- ${x}`).join("\n") || "- (sem critérios registrados)";
-  let sdd: any = null;
-  try {
-    sdd = await gerarJson({
-      tarefa: "arquitetura",
-      system:
-        "Você é um engenheiro de software. Gere um SDD (Spec-Driven Development) TESTÁVEL para UMA história de usuário, " +
-        "para ser EXECUTADO por um agente de código externo (Cursor, Claude Code). Seja concreto e verificável. Responda SOMENTE JSON.",
-      instrucao:
-        `Contexto da iniciativa ${ini.codigo} — ${ini.titulo}:\n${contexto || "(sem documentos anteriores)"}\n\n` +
-        `História ${h.codigo}: ${h.titulo}\n${h.descricao ?? ""}\nCritérios de aceite:\n${criterios}\n\n` +
-        'Formato JSON: { "resumo": "1 frase", ' +
-        '"markdown": "# SDD — <história>\\n## Contexto\\n## Escopo (o que entra/não entra)\\n## Especificação técnica (componentes, arquivos/áreas a mexer, contratos/APIs, dados)\\n## Plano de testes (casos derivados dos critérios de aceite, verificáveis)\\n## Tarefas (passo a passo)\\n## Definition of Done", ' +
-        '"promptPronto": "Um prompt autocontido, em 1ª pessoa para o agente de código: papel, resumo do contexto, tarefa objetiva, testes de aceite a satisfazer, restrições e o que entregar (arquivos, testes)." }',
-      maxTokens: 2600,
-    });
-  } catch { sdd = null; }
+  const provider = await getProvider();
+  const model = await resolveModel("arquitetura");
+  const baseUser =
+    `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n` +
+    `Documentos anteriores da iniciativa (funcionais e técnicos — considere-os):\n${contexto || "(nenhum)"}\n\n` +
+    `História ${h.codigo}: ${h.titulo}\n${h.descricao ?? ""}\nCritérios de aceite:\n${criterios}`;
 
-  const resumo = (sdd?.resumo && String(sdd.resumo).trim()) || `SDD da história ${h.codigo}.`;
-  const promptPronto = (sdd?.promptPronto && String(sdd.promptPronto).trim())
-    || `Implemente a história ${h.codigo} — ${h.titulo}.\n\n${h.descricao ?? ""}\n\nCritérios de aceite:\n${criterios}\n\nEntregue o código e os testes que satisfaçam os critérios acima.`;
-  let markdown = (sdd?.markdown && String(sdd.markdown).trim())
-    || `# SDD — ${h.codigo} ${h.titulo}\n\n## Contexto\n${h.descricao ?? ""}\n\n## Critérios de aceite\n${criterios}`;
+  // 1) SDD em Markdown DIRETO (mais robusto que JSON com markdown embutido), com retry.
+  let markdown = "";
+  const sysDoc =
+    "Você é um engenheiro de software. Escreva um SDD (Spec-Driven Development) TESTÁVEL para UMA história, " +
+    "para ser EXECUTADO por um agente de código externo (Cursor, Claude Code). CONSIDERE OBRIGATORIAMENTE os documentos anteriores " +
+    "da iniciativa (funcionais e técnicos). Entregue SOMENTE o documento em Markdown, específico e concreto (não repita apenas a descrição da história), " +
+    "com as seções: ## Contexto, ## Escopo (o que entra e o que não entra), ## Especificação técnica (componentes, arquivos/áreas a mexer, contratos/APIs, modelo de dados), " +
+    "## Plano de testes (casos verificáveis derivados dos critérios de aceite), ## Tarefas (passo a passo), ## Definition of Done.";
+  for (let i = 0; i < 2 && !markdown; i++) {
+    try {
+      const r = await provider.chat({ model, system: sysDoc, messages: [{ role: "user", content: `${baseUser}\n\nProduza o SDD completo.` }], maxTokens: 2200, temperature: 0.3 });
+      markdown = (r.content ?? "").trim();
+    } catch { /* tenta de novo */ }
+  }
+
+  // 2) Prompt pronto para colar no agente de código.
+  let promptPronto = "";
+  try {
+    const rp = await provider.chat({
+      model,
+      system: "Você gera um PROMPT autocontido, em 1ª pessoa, para um agente de código implementar a história: papel, resumo do contexto, tarefa objetiva, testes de aceite a satisfazer, restrições (padrões do repositório) e o que entregar (arquivos + testes). Responda SOMENTE o prompt.",
+      messages: [{ role: "user", content: `${baseUser}\n\nSDD:\n${markdown || "(use os critérios acima)"}` }],
+      maxTokens: 600, temperature: 0.3,
+    });
+    promptPronto = (rp.content ?? "").trim();
+  } catch { /* usa fallback */ }
+  if (!promptPronto) {
+    promptPronto = `Implemente a história ${h.codigo} — ${h.titulo}, no contexto da iniciativa "${ini.titulo}".\n\n${h.descricao ?? ""}\n\nCritérios de aceite a satisfazer:\n${criterios}\n\nSiga os padrões do repositório. Entregue o código e os testes automatizados que cobrem os critérios acima.`;
+  }
+  if (!markdown) {
+    const testes = (h.criteriosAceite ?? []).map((c: string) => `- Teste: ${c}`).join("\n") || "- Teste do caminho feliz";
+    markdown =
+      `# SDD — ${h.codigo} ${h.titulo}\n\n## Contexto\n${h.descricao ?? ""}\n\n## Escopo\n- Entra: o comportamento descrito na história\n- Não entra: itens de outras histórias\n\n` +
+      `## Especificação técnica\n- Componentes e arquivos afetados a definir na implementação\n- Contratos/APIs e dados conforme os critérios\n\n` +
+      `## Plano de testes\n${testes}\n\n## Tarefas\n1. Implementar o comportamento\n2. Cobrir com testes\n\n## Definition of Done\n- Critérios de aceite atendidos e testes passando`;
+  }
   markdown += `\n\n## 🤖 Prompt para o agente de código\n\n\`\`\`\n${promptPronto}\n\`\`\`\n`;
+  const resumo = `SDD testável de ${h.codigo}: ${h.titulo}`;
 
   const antigos = (await db.select().from(s.documento)).filter((d: any) => d.tipo === "sdd" && d.historiaId === h.id);
   for (const d of antigos) await db.delete(s.documento).where(eq(s.documento.id, d.id));

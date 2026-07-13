@@ -105,23 +105,27 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
-// SDD testável de uma história.
-function talvezSdd(req: ChatRequest): string | null {
-  if (!/Gere um SDD|Spec-Driven Development/i.test(req.system)) return null;
+// SDD testável de uma história (Markdown direto).
+function talvezSddDoc(req: ChatRequest): string | null {
+  if (!/SDD \(Spec-Driven Development\) TESTÁVEL/i.test(req.system) || !/SOMENTE o documento em Markdown/i.test(req.system)) return null;
   const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const h = ultima.match(/Hist[óo]ria\s+(\S+):\s*(.+)/i);
-  const cod = h?.[1] ?? "H01"; const tit = h?.[2]?.trim() ?? "história";
-  const markdown =
-    `# SDD — ${cod} ${tit}\n\n## Contexto\nHistória derivada da iniciativa.\n\n` +
-    `## Escopo\n- Entra: o fluxo descrito na história\n- Não entra: itens de outras histórias\n\n` +
-    `## Especificação técnica\n- Endpoint/serviço responsável pela ação\n- Validação de entradas\n- Persistência do resultado\n\n` +
-    `## Plano de testes\n- Teste do caminho feliz (critério de aceite principal)\n- Teste de validação de entrada\n- Teste de erro/edge case\n\n` +
-    `## Tarefas\n1. Implementar o handler\n2. Adicionar validação\n3. Escrever os testes\n\n## Definition of Done\n- Testes passando e critérios de aceite satisfeitos`;
-  const promptPronto =
-    `Você é um engenheiro. Implemente a história ${cod} — ${tit}.\n` +
-    `Contexto: parte de uma iniciativa maior.\nTarefa: implementar o fluxo com validação e persistência.\n` +
-    `Testes de aceite a satisfazer:\n- Caminho feliz funciona\n- Entradas inválidas são rejeitadas\nRestrições: siga os padrões do repositório.\nEntregue: código + testes.`;
-  return JSON.stringify({ resumo: `SDD testável da história ${cod}.`, markdown, promptPronto });
+  const cod = h?.[1] ?? "H01"; const tit = h?.[2]?.split("\n")[0]?.trim() ?? "história";
+  return (
+    `# SDD — ${cod} ${tit}\n\n## Contexto\nDerivado da iniciativa, considerando o produto existente (não recria o que já há no código).\n\n` +
+    `## Escopo\n- Entra: o comportamento desta história\n- Não entra: itens de outras histórias\n\n` +
+    `## Especificação técnica\n- Serviço/endpoint responsável\n- Reutiliza componentes já existentes quando aplicável\n- Validação de entradas e persistência\n\n` +
+    `## Plano de testes\n- Caminho feliz (critério principal)\n- Validação de entrada\n- Erro/edge case\n\n` +
+    `## Tarefas\n1. Implementar o comportamento reutilizando o que já existe\n2. Adicionar validação\n3. Escrever os testes\n\n## Definition of Done\n- Critérios atendidos e testes passando`
+  );
+}
+// Prompt pronto para o agente de código.
+function talvezPromptCodigo(req: ChatRequest): string | null {
+  if (!/PROMPT autocontido/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const h = ultima.match(/Hist[óo]ria\s+(\S+):\s*(.+)/i);
+  const cod = h?.[1] ?? "H01"; const tit = h?.[2]?.split("\n")[0]?.trim() ?? "história";
+  return `Você é um engenheiro. Implemente a história ${cod} — ${tit}, reutilizando o que já existe no repositório (não recrie funcionalidades existentes). Satisfaça os critérios de aceite, siga os padrões do repositório e entregue código + testes automatizados.`;
 }
 
 // Épicos de uma iniciativa (etapa de Histórias).
@@ -256,8 +260,10 @@ function responder(req: ChatRequest): string {
   if (sugCap) return sugCap;
   const party = talvezParty(req);
   if (party) return party;
-  const sdd = talvezSdd(req);
-  if (sdd) return sdd;
+  const sddDoc = talvezSddDoc(req);
+  if (sddDoc) return sddDoc;
+  const promptCod = talvezPromptCodigo(req);
+  if (promptCod) return promptCod;
   const epicos = talvezEpicos(req);
   if (epicos) return epicos;
   const hist = talvezHistorias(req);
