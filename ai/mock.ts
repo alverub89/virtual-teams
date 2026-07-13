@@ -105,6 +105,31 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
+// Épicos de uma iniciativa (etapa de Histórias).
+function talvezEpicos(req: ChatRequest): string | null {
+  if (!/identifique os [ÉE]PICOS/i.test(req.system)) return null;
+  return JSON.stringify({
+    epicos: [
+      { nome: "Onboarding e perfil", descricao: "Cadastro, autenticação e características do usuário." },
+      { nome: "Motor de sugestão", descricao: "Gerar a sugestão de treino a partir das características." },
+      { nome: "Acompanhamento", descricao: "Registrar progresso e ajustar sugestões ao longo do tempo." },
+    ],
+  });
+}
+
+// Histórias INVEST de um épico.
+function talvezHistorias(req: ChatRequest): string | null {
+  if (!/Quebre o [ÉE]PICO em HIST[ÓO]RIAS/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const ep = ultima.match(/[ÉE]pico:\s*(.+)/i)?.[1]?.trim() ?? "Épico";
+  return JSON.stringify({
+    historias: [
+      { titulo: `Definir ${ep.toLowerCase()} — fluxo principal`, descricao: `Como usuário, quero concluir ${ep.toLowerCase()} para avançar no objetivo.`, criteriosAceite: ["Dado que informo os dados, quando confirmo, então o sistema registra e segue.", "Erros são exibidos de forma clara."], pontos: 3 },
+      { titulo: `Validar entradas de ${ep.toLowerCase()}`, descricao: `Como usuário, quero validações para evitar erros em ${ep.toLowerCase()}.`, criteriosAceite: ["Campos obrigatórios são checados.", "Mensagens de erro são específicas."], pontos: 2 },
+    ],
+  });
+}
+
 // Planejamento de leitura de repositório: escolhe alguns arquivos da lista.
 function talvezPlanoLeitura(req: ChatRequest): string | null {
   if (!/planeja a LEITURA de um reposit[oó]rio/i.test(req.system)) return null;
@@ -165,6 +190,10 @@ function talvezKbRepo(req: ChatRequest): string | null {
 }
 
 function responder(req: ChatRequest): string {
+  const epicos = talvezEpicos(req);
+  if (epicos) return epicos;
+  const hist = talvezHistorias(req);
+  if (hist) return hist;
   const plano = talvezPlanoLeitura(req);
   if (plano) return plano;
   const kb = talvezKbRepo(req);

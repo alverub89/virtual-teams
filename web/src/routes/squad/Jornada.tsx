@@ -21,7 +21,7 @@ interface Jornada {
   etapaAtual: number;
   capacidade: { nome: string } | null;
   etapas: Etapa[];
-  historias: { id: string; codigo: string; titulo: string; pontos: number | null; status: string }[];
+  historias: { id: string; codigo: string; titulo: string; descricao: string | null; pontos: number | null; status: string; epico: string | null; criteriosAceite: string[]; origem?: string }[];
   docs: { id: string; titulo: string; emoji: string | null }[];
 }
 interface Msg {
@@ -128,19 +128,30 @@ export default function JornadaPage() {
 
           {ini.historias.length > 0 && etapaSel >= 4 && (
             <>
-              <div className="sec-title">Histórias (IU Click)</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {ini.historias.map((h) => (
-                  <div className="story" key={h.id}>
-                    <span className="s-id">{h.codigo}</span>
-                    <span className="s-title">{h.titulo}</span>
-                    <Chip tone={h.status === "concluida" ? "good" : h.status === "em_dev" ? "blue" : "neutral"}>
-                      {h.status.replace("_", " ")}
-                    </Chip>
-                    {h.pontos != null && <span className="pts">{h.pontos} pts</span>}
+              <div className="sec-title">Backlog · {ini.historias.length} histórias</div>
+              {[...new Map(ini.historias.map((h) => [h.epico ?? "Geral", true])).keys()].map((epico) => (
+                <div key={epico} style={{ marginBottom: 12 }}>
+                  <div className="sub" style={{ fontSize: 12.5, fontWeight: 600, margin: "6px 0" }}>📦 {epico}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {ini.historias.filter((h) => (h.epico ?? "Geral") === epico).map((h) => (
+                      <div className="card" key={h.id} style={{ padding: 12 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <span className="s-id">{h.codigo}</span>
+                          <strong style={{ flex: 1 }}>{h.titulo}</strong>
+                          <Chip tone={h.status === "concluida" ? "good" : h.status === "em_dev" ? "blue" : "neutral"}>{h.status.replace("_", " ")}</Chip>
+                          {h.pontos != null && <span className="pts">{h.pontos} pts</span>}
+                        </div>
+                        {h.descricao && <p className="sub" style={{ margin: "6px 0 0", fontSize: 12.5 }}>{h.descricao}</p>}
+                        {h.criteriosAceite?.length > 0 && (
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12 }}>
+                            {h.criteriosAceite.map((c, i) => <li key={i} className="sub">{c}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </>
           )}
 

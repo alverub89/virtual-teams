@@ -6,6 +6,7 @@ import { rbac } from "../_mw/rbac";
 import { getProvider } from "../../../ai/provider";
 import { resolveModel, type TipoTarefa } from "../../../ai/router";
 import { composeSystemPrompt } from "../../../ai/prompts";
+import { gerarJson } from "../_lib/aigen";
 import { audit } from "../_lib/audit";
 
 const app = new Hono();
@@ -166,6 +167,82 @@ async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 1400
   return docs
     .map((d: any) => `### ${d.emoji ?? "📄"} ${d.titulo}\n${(d.conteudo ?? "").slice(0, maxCharsPorDoc)}`)
     .join("\n\n");
+}
+
+// GERAÇÃO ITERATIVA DE HISTÓRIAS (etapa 4): a IA primeiro identifica os ÉPICOS
+// da iniciativa (a partir do Brief/PRD/Arquitetura já gerados) e depois, para
+// cada épico, quebra em várias HISTÓRIAS INVEST testáveis (com critérios de
+// aceite e estimativa). Salva como registros reais no backlog. Retorna as
+// histórias criadas para montar o documento da etapa.
+async function gerarHistoriasIterativo(db: any, ini: any): Promise<any[]> {
+  const contexto = await contextoEtapasAnteriores(db, ini);
+  const base = `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n${contexto || "(sem documentos anteriores)"}`;
+
+  // 1) Épicos
+  let epicos: { nome: string; descricao?: string }[] = [];
+  try {
+    const plano = await gerarJson({
+      tarefa: "historias",
+      system: "Você é um Product Owner. A partir do contexto da iniciativa, identifique os ÉPICOS (fatias de valor) que a compõem. Responda SOMENTE JSON.",
+      instrucao: `${base}\n\nFormato JSON: { "epicos": [{ "nome": "...", "descricao": "..." }] } (3 a 6 épicos, do mais essencial ao complementar).`,
+      maxTokens: 900,
+    });
+    if (Array.isArray(plano?.epicos)) epicos = plano.epicos.filter((e: any) => e?.nome).slice(0, 6);
+  } catch { /* segue com fallback */ }
+  if (!epicos.length) epicos = [{ nome: ini.titulo, descricao: ini.descricao ?? "" }];
+
+  // 2) Histórias por épico (iteração)
+  const criadas: any[] = [];
+  let seq = (await db.select().from(s.historia)).filter((h: any) => h.iniciativaId === ini.id).length;
+  let ordem = seq;
+  for (const ep of epicos) {
+    let hs: any[] = [];
+    try {
+      const r = await gerarJson({
+        tarefa: "historias",
+        system:
+          "Você é um Product Owner/Scrum Master. Quebre o ÉPICO em HISTÓRIAS de usuário no formato INVEST, cada uma TESTÁVEL. Responda SOMENTE JSON.",
+        instrucao:
+          `${base}\n\nÉpico: ${ep.nome}\n${ep.descricao ?? ""}\n\n` +
+          'Formato JSON: { "historias": [{ "titulo": "curto", "descricao": "Como <persona>, quero <ação> para <valor>", ' +
+          '"criteriosAceite": ["Dado/Quando/Então…", "…"], "pontos": 1|2|3|5|8 }] } (2 a 5 histórias, independentes e pequenas).',
+        maxTokens: 1400,
+      });
+      if (Array.isArray(r?.historias)) hs = r.historias.filter((h: any) => h?.titulo);
+    } catch { /* pula o épico */ }
+    for (const h of hs) {
+      seq += 1; ordem += 1;
+      const [row] = await db.insert(s.historia).values({
+        iniciativaId: ini.id,
+        codigo: `${ini.codigo}-H${String(seq).padStart(2, "0")}`,
+        titulo: String(h.titulo).slice(0, 200),
+        descricao: h.descricao ?? null,
+        pontos: [1, 2, 3, 5, 8].includes(Number(h.pontos)) ? Number(h.pontos) : null,
+        status: "backlog",
+        epico: ep.nome,
+        criteriosAceite: Array.isArray(h.criteriosAceite) ? h.criteriosAceite.map((x: any) => String(x)).slice(0, 12) : [],
+        ordem,
+        origem: "ia",
+      }).returning();
+      criadas.push(row);
+    }
+  }
+  return criadas;
+}
+
+// Monta o documento (backlog) da etapa de Histórias a partir das histórias reais.
+function docDeHistorias(ini: any, historias: any[]): string {
+  const porEpico = new Map<string, any[]>();
+  for (const h of historias) { const k = h.epico ?? "Geral"; if (!porEpico.has(k)) porEpico.set(k, []); porEpico.get(k)!.push(h); }
+  let md = `## Backlog — ${ini.titulo}\n\n${historias.length} história(s) em ${porEpico.size} épico(s).\n`;
+  for (const [ep, hs] of porEpico) {
+    md += `\n### Épico: ${ep}\n`;
+    for (const h of hs) {
+      md += `\n**${h.codigo} — ${h.titulo}**${h.pontos ? ` _(${h.pontos} pts)_` : ""}\n\n${h.descricao ?? ""}\n`;
+      if (h.criteriosAceite?.length) { md += `\nCritérios de aceite:\n`; for (const c of h.criteriosAceite) md += `- ${c}\n`; }
+    }
+  }
+  return md;
 }
 
 // Gera (via IA) o documento formal da etapa a partir do contexto + conversa e
@@ -421,9 +498,24 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
     ? await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId))
     : [null];
 
-  // Toda etapa ENTREGA um documento formal, gerado pelo agente e armazenado em
-  // Documentação (visível na jornada e em /squad/docs).
-  const doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
+  // Etapa 4 (Histórias): geração ITERATIVA — épicos → histórias reais no backlog
+  // + o documento da etapa é o backlog. Demais etapas: documento formal via IA.
+  let doc: any;
+  if (ordem === 4) {
+    const historias = await gerarHistoriasIterativo(db, ini);
+    const cfg = DOC_ETAPA[4];
+    const nEpicos = new Set(historias.map((h) => h.epico)).size;
+    const markdown = historias.length ? docDeHistorias(ini, historias) : "_Nenhuma história pôde ser gerada — trabalhe com o agente no chat e conclua novamente._";
+    [doc] = await db.insert(s.documento).values({
+      squadId: ini.squadId, iniciativaId: ini.id, titulo: cfg.titulo(ini.titulo), tipo: cfg.tipo, emoji: cfg.emoji,
+      resumo: `${historias.length} história(s) em ${nEpicos} épico(s).`, conteudo: markdown,
+      autorNome: ag?.nome ?? "Agente da etapa", escopo: "squad",
+    }).returning();
+  } else {
+    // Toda etapa ENTREGA um documento formal, gerado pelo agente e armazenado em
+    // Documentação (visível na jornada e em /squad/docs).
+    doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
+  }
 
   await db
     .update(s.iniciativaEtapa)

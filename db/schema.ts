@@ -284,6 +284,11 @@ export const historia = aiWorkspace.table("historia", {
   pontos: integer("pontos"),
   status: text("status").notNull().default("backlog"), // backlog|em_dev|review|concluida
   responsavelId: uuid("responsavel_id").references(() => pessoa.id),
+  // Geração iterativa por IA (épicos → histórias INVEST testáveis).
+  epico: text("epico"),
+  criteriosAceite: jsonb("criterios_aceite").$type<string[]>().notNull().default([]),
+  ordem: integer("ordem").notNull().default(0),
+  origem: text("origem").notNull().default("manual"), // manual | ia
 });
 
 export const mensagemChat = aiWorkspace.table("mensagem_chat", {
