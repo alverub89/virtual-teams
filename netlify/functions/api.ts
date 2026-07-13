@@ -13,6 +13,7 @@ import estrutura from "./_routes/estrutura";
 import runs from "./_routes/runs";
 import consoleRoutes from "./_routes/console";
 import gestao from "./_routes/gestao";
+import mcpLive from "./_routes/mcp";
 
 // API do AI Workspace — Hono catch-all em /api/* (docs/spec §5).
 const app = new Hono().basePath("/api");
@@ -23,6 +24,7 @@ app.get("/health/db", async (c) => {
   return c.json(await dbDiagnostics());
 });
 app.route("/auth", authRoutes); // públicas (config, demo, callback OAuth, logout)
+app.route("/mcp", mcpLive); // servidor MCP vivo por slug — público (clientes MCP externos)
 
 app.use("*", auth); // tudo abaixo exige sessão
 

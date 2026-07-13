@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, del, post, put } from "../../lib/api";
 import { Button, Card, Chip, Fld, Modal, PageHead } from "../../components/ui";
@@ -231,7 +232,7 @@ export function EsteiraConfig() {
 
 /* ==================== MCPs & modelos ==================== */
 
-interface Mcp { id: string; nome: string; sistema: string; status: string; descricao: string | null; url: string | null; escopo: string; squadId: string | null; tools: { id: string; nome: string; permissao: string }[] }
+interface Mcp { id: string; nome: string; sistema: string; status: string; descricao: string | null; url: string | null; escopo: string; squadId: string | null; slug: string | null; proposito: string | null; tools: { id: string; nome: string; permissao: string }[] }
 interface Rota { id: string; tarefa: string; nivel: string; modelo: string; custoRelativo: number }
 interface Consumo { id: string; squadNome: string; promptTokens: number; completionTokens: number; custo: number; budget: number | null; percentual: number | null }
 interface SquadMin { squads: { id: string; nome: string }[] }
@@ -273,20 +274,22 @@ export function Mcps() {
         {mcps?.map((m) => (
           <Card key={m.id} pad>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <h3 style={{ flex: 1 }}>{m.nome}</h3>
-              <Chip tone={m.status === "conectado" ? "good" : "neutral"}>{m.status}</Chip>
+              <h3 style={{ flex: 1 }}><Link to={`/console/mcps/${m.id}`} style={{ color: "inherit", textDecoration: "none" }}>{m.nome}</Link></h3>
+              <Chip tone={m.status === "conectado" ? "good" : "neutral"}>{m.slug ? "vivo" : m.status}</Chip>
             </div>
-            <p className="sub">{m.descricao || m.sistema}{m.url ? ` · ${m.url}` : ""}</p>
+            <p className="sub">{m.proposito || m.descricao || m.sistema}</p>
             <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
               <Chip tone={m.escopo === "global" ? "blue" : "neutral"}>{m.escopo === "global" ? "global" : "squad"}</Chip>
-              {m.tools?.map((t) => <span key={t.id} className={`perm ${t.permissao}`}>{t.nome}</span>)}
+              <Chip tone="neutral">{m.tools?.length ?? 0} tool(s)</Chip>
+              {m.slug && <span className="perm leitura">/mcp/{m.slug}</span>}
               <button className="modal-x" style={{ marginLeft: "auto" }} title="Remover" onClick={() => confirm(`Remover "${m.nome}"?`) && remover.mutate(m.id)}>✕</button>
             </div>
+            <Link to={`/console/mcps/${m.id}`} className="btn" style={{ textDecoration: "none", marginTop: 10, display: "inline-block" }}>Tools & gerar →</Link>
           </Card>
         ))}
       </div>
       <div className="banner" style={{ marginBottom: 8 }}>
-        🔌 <span>Estas são as conexões configuradas. A conexão viva a servidores MCP (handshake/tools em runtime) é a próxima camada.</span>
+        🔌 <span>Cadastre tools em cada MCP, gere o servidor com IA e ele passa a responder ao vivo em <code>/api/mcp/&lt;slug&gt;</code> (JSON-RPC: initialize · tools/list · tools/call).</span>
       </div>
 
       <div className="sec-title">Roteamento de modelos por tarefa</div>

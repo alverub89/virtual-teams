@@ -1,0 +1,104 @@
+// Helpers de geração/execução com IA para o construtor de MCP.
+// - gerarJson: pede JSON estrito ao provedor e extrai o objeto com robustez.
+// - executarTool: roda uma tool registrada (execucao "ia" ou "http") com args.
+
+import { getProvider } from "../../../ai/provider";
+import { resolveModel } from "../../../ai/router";
+
+// Extrai o primeiro objeto/array JSON de um texto (o modelo às vezes embrulha
+// em ```json ... ``` ou adiciona prosa). Lança se nada válido for achado.
+export function extrairJson(texto: string): any {
+  const limpo = texto.replace(/```json/gi, "```").trim();
+  const semCerca = limpo.includes("```") ? limpo.split("```")[1] ?? limpo : limpo;
+  const alvo = semCerca.trim();
+  try {
+    return JSON.parse(alvo);
+  } catch {
+    const ini = alvo.search(/[{[]/);
+    const fim = Math.max(alvo.lastIndexOf("}"), alvo.lastIndexOf("]"));
+    if (ini >= 0 && fim > ini) return JSON.parse(alvo.slice(ini, fim + 1));
+    throw new Error("resposta da IA não continha JSON válido");
+  }
+}
+
+// Pede ao provedor uma resposta JSON dado um system + instrução. tarefa define
+// o nível do modelo (via roteador). Retorna o objeto já parseado.
+export async function gerarJson(opts: {
+  system: string;
+  instrucao: string;
+  tarefa?: "arquitetura" | "prd" | "historias" | "resumo" | "classificacao" | "sync";
+  maxTokens?: number;
+}): Promise<any> {
+  const provider = await getProvider();
+  const model = await resolveModel(opts.tarefa ?? "historias");
+  const res = await provider.chat({
+    model,
+    system: opts.system,
+    messages: [{ role: "user", content: opts.instrucao }],
+    maxTokens: opts.maxTokens ?? 1200,
+    temperature: 0.2,
+  });
+  return extrairJson(res.content);
+}
+
+// Substitui {{param}} num template (string ou objeto) pelos valores dos args.
+function interpolar(tmpl: any, args: Record<string, unknown>): any {
+  if (typeof tmpl === "string") {
+    return tmpl.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, k) => {
+      const v = args[k];
+      return v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+    });
+  }
+  if (Array.isArray(tmpl)) return tmpl.map((x) => interpolar(x, args));
+  if (tmpl && typeof tmpl === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(tmpl)) out[k] = interpolar(v, args);
+    return out;
+  }
+  return tmpl;
+}
+
+// Executa uma tool registrada. Retorna { ok, resultado } ou { ok:false, erro }.
+export async function executarTool(
+  tool: { nome: string; descricao: string | null; execucao: string; handlerConfig: any; inputSchema: any },
+  args: Record<string, unknown>
+): Promise<{ ok: boolean; resultado?: unknown; erro?: string }> {
+  try {
+    if (tool.execucao === "http") {
+      const cfg = tool.handlerConfig ?? {};
+      const metodo = (cfg.metodo ?? cfg.method ?? "GET").toUpperCase();
+      const url = interpolar(cfg.url ?? "", args);
+      if (!url) return { ok: false, erro: "handler http sem url" };
+      const headers = interpolar(cfg.headers ?? {}, args) as Record<string, string>;
+      const temBody = metodo !== "GET" && metodo !== "HEAD" && (cfg.body ?? cfg.bodyTemplate);
+      const body = temBody ? interpolar(cfg.body ?? cfg.bodyTemplate, args) : undefined;
+      const res = await fetch(url, {
+        method: metodo,
+        headers: temBody ? { "content-type": "application/json", ...headers } : headers,
+        body: temBody ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined,
+      });
+      const txt = await res.text();
+      let parsed: unknown = txt;
+      try { parsed = JSON.parse(txt); } catch { /* mantém texto */ }
+      return { ok: res.ok, resultado: parsed, erro: res.ok ? undefined : `HTTP ${res.status}` };
+    }
+
+    // execucao "ia": usa o prompt do handler + os argumentos como contexto.
+    const cfg = tool.handlerConfig ?? {};
+    const system =
+      cfg.prompt ??
+      `Você executa a tool "${tool.nome}": ${tool.descricao ?? ""}. Responda de forma direta e útil ao pedido, usando os parâmetros fornecidos.`;
+    const provider = await getProvider();
+    const model = await resolveModel("historias");
+    const res = await provider.chat({
+      model,
+      system,
+      messages: [{ role: "user", content: `Parâmetros (JSON): ${JSON.stringify(args)}` }],
+      maxTokens: cfg.maxTokens ?? 800,
+      temperature: cfg.temperature ?? 0.4,
+    });
+    return { ok: true, resultado: res.content };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : String(e) };
+  }
+}

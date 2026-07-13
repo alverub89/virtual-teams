@@ -165,6 +165,9 @@ export const conexaoMcp = aiWorkspace.table("conexao_mcp", {
   escopo: text("escopo").notNull().default("global"), // global|squad
   squadId: uuid("squad_id"),
   comunidadeId: uuid("comunidade_id"),
+  slug: text("slug"), // endpoint vivo: /mcp/:slug (único quando gerado pela plataforma)
+  proposito: text("proposito"), // o que este MCP entrega, para a IA compor o manifesto
+  geradoEm: timestamp("gerado_em", { withTimezone: true }), // quando a IA gerou o manifesto+handlers
 });
 
 export const tool = aiWorkspace.table("tool", {
@@ -173,6 +176,11 @@ export const tool = aiWorkspace.table("tool", {
   descricao: text("descricao"),
   permissao: text("permissao").notNull(), // leitura|escrita|critica
   conexaoMcpId: uuid("conexao_mcp_id").references(() => conexaoMcp.id),
+  execucao: text("execucao").notNull().default("ia"), // ia|http — como a tool roda quando chamada
+  parametros: text("parametros"), // descrição em linguagem natural dos parâmetros (fonte p/ a IA gerar o schema)
+  inputSchema: jsonb("input_schema").$type<Record<string, unknown>>(), // JSON Schema gerado p/ tools/list
+  handlerConfig: jsonb("handler_config").$type<Record<string, unknown>>(), // ia: {prompt}; http: {metodo,url,headers,body}
+  comunidadeId: uuid("comunidade_id"),
 });
 
 export const agenteTool = aiWorkspace.table("agente_tool", {

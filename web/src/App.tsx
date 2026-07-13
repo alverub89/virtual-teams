@@ -23,6 +23,7 @@ import Estrutura from "./routes/console/Estrutura";
 import Skills from "./routes/console/Skills";
 import Agentes, { AgenteEdit } from "./routes/console/Agentes";
 import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plataforma";
+import McpDetalhe from "./routes/console/McpDetalhe";
 import Indicadores from "./routes/gestao/Indicadores";
 import { DocsComunidade, DocsFeatures } from "./routes/gestao/DocsGestao";
 
@@ -83,6 +84,7 @@ export default function App() {
             <Route path="/console/agentes" element={<Agentes />} />
             <Route path="/console/agentes/:id" element={<AgenteEdit />} />
             <Route path="/console/mcps" element={<Mcps />} />
+            <Route path="/console/mcps/:id" element={<McpDetalhe />} />
           </Route>
 
           <Route

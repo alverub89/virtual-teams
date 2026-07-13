@@ -561,8 +561,158 @@ app.put("/mcps/:id", cfg, async (c) => {
 
 app.delete("/mcps/:id", cfg, async (c) => {
   const db = await getDb();
-  await db.delete(s.conexaoMcp).where(eq(s.conexaoMcp.id, c.req.param("id")));
+  const id = c.req.param("id");
+  await db.delete(s.tool).where(eq(s.tool.conexaoMcpId, id));
+  await db.delete(s.conexaoMcp).where(eq(s.conexaoMcp.id, id));
   return c.json({ ok: true });
+});
+
+/* ---------- Tools (registro rico) + geração de MCP com IA ---------- */
+
+// Detalhe de um MCP com suas tools — base da tela do construtor.
+app.get("/mcps/:id", async (c) => {
+  const db = await getDb();
+  const id = c.req.param("id");
+  const [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.id, id));
+  if (!m) return c.json({ error: "não encontrado" }, 404);
+  const tools = (await db.select().from(s.tool)).filter((t: any) => t.conexaoMcpId === id);
+  const base = process.env.APP_URL ?? process.env.URL ?? "";
+  return c.json({ ...m, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools });
+});
+
+const ToolIn = z.object({
+  nome: z.string().min(2),
+  descricao: z.string().optional(),
+  permissao: z.enum(["leitura", "escrita", "critica"]).default("leitura"),
+  conexaoMcpId: z.string().uuid(),
+  execucao: z.enum(["ia", "http"]).default("ia"),
+  parametros: z.string().optional(),
+  handlerConfig: z.record(z.any()).optional(),
+});
+
+app.post("/tools", cfg, async (c) => {
+  const me = c.get("me");
+  const body = ToolIn.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const d = body.data;
+  const db = await getDb();
+  const [t] = await db
+    .insert(s.tool)
+    .values({
+      nome: d.nome,
+      descricao: d.descricao ?? null,
+      permissao: d.permissao,
+      conexaoMcpId: d.conexaoMcpId,
+      execucao: d.execucao,
+      parametros: d.parametros ?? null,
+      handlerConfig: d.handlerConfig ?? null,
+      comunidadeId: me.comunidadeId,
+    })
+    .returning();
+  await audit(me, "criar_tool", `tool:${d.nome}`, { execucao: d.execucao });
+  return c.json(t, 201);
+});
+
+app.put("/tools/:id", cfg, async (c) => {
+  const body = ToolIn.partial().safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  await db.update(s.tool).set(body.data as any).where(eq(s.tool.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
+app.delete("/tools/:id", cfg, async (c) => {
+  const db = await getDb();
+  const id = c.req.param("id");
+  await db.delete(s.agenteTool).where(eq(s.agenteTool.toolId, id));
+  await db.delete(s.tool).where(eq(s.tool.id, id));
+  return c.json({ ok: true });
+});
+
+// Testa uma tool com argumentos, no console (mesma execução do endpoint vivo).
+app.post("/tools/:id/testar", cfg, async (c) => {
+  const db = await getDb();
+  const [t] = await db.select().from(s.tool).where(eq(s.tool.id, c.req.param("id")));
+  if (!t) return c.json({ error: "não encontrada" }, 404);
+  const args = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const { executarTool } = await import("../_lib/aigen");
+  const r = await executarTool(t as any, args?.arguments ? (args.arguments as any) : args);
+  return c.json(r);
+});
+
+// Gera o MCP com IA: slug + propósito (manifesto) e, por tool, um JSON Schema
+// de entrada e — para tools "ia" — um prompt de handler. Persiste tudo e marca
+// gerado_em. É o "uma IA gera o MCP" do fluxo.
+const slugify = (txt: string) =>
+  txt.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 40) || "mcp";
+
+app.post("/mcps/:id/gerar", cfg, async (c) => {
+  const me = c.get("me");
+  const id = c.req.param("id");
+  const db = await getDb();
+  const [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.id, id));
+  if (!m) return c.json({ error: "não encontrado" }, 404);
+  const tools = (await db.select().from(s.tool)).filter((t: any) => t.conexaoMcpId === id);
+  if (!tools.length) return c.json({ error: "cadastre ao menos uma tool antes de gerar" }, 400);
+
+  const { gerarJson } = await import("../_lib/aigen");
+  const listaTools = tools.map((t: any) => ({
+    nome: t.nome,
+    descricao: t.descricao ?? "",
+    execucao: t.execucao,
+    parametros: t.parametros ?? "",
+  }));
+
+  let plano: any;
+  try {
+    plano = await gerarJson({
+      tarefa: "arquitetura",
+      system:
+        "Você é um engenheiro que projeta servidores MCP (Model Context Protocol). " +
+        "A partir de um conjunto de tools descritas em linguagem natural, você produz um manifesto " +
+        "e, para cada tool, um JSON Schema de entrada (draft-07, objeto com properties/required) " +
+        "coerente com os parâmetros descritos. Responda SOMENTE JSON.",
+      instrucao:
+        `MCP: "${m.nome}" — sistema/integração: ${m.sistema}. Descrição: ${m.descricao ?? "-"}.\n` +
+        `Tools:\n${JSON.stringify(listaTools, null, 2)}\n\n` +
+        "Retorne JSON no formato:\n" +
+        '{ "proposito": "string curta do que este MCP entrega", ' +
+        '"tools": [ { "nome": "igual ao informado", "inputSchema": { "type":"object", "properties": {...}, "required":[...] }, ' +
+        '"promptHandler": "instrução de sistema para executar a tool quando ela for do tipo ia (senão string vazia)" } ] }',
+      maxTokens: 1800,
+    });
+  } catch (e) {
+    return c.json({ error: `falha na geração com IA: ${e instanceof Error ? e.message : e}` }, 502);
+  }
+
+  const porNome = new Map<string, any>((plano?.tools ?? []).map((t: any) => [String(t.nome), t]));
+  for (const t of tools) {
+    const g = porNome.get(t.nome);
+    if (!g) continue;
+    const patch: any = { inputSchema: g.inputSchema ?? { type: "object", properties: {} } };
+    if (t.execucao === "ia") {
+      const prompt = g.promptHandler || `Execute a tool "${t.nome}": ${t.descricao ?? ""}.`;
+      patch.handlerConfig = { ...(t.handlerConfig ?? {}), prompt };
+    }
+    await db.update(s.tool).set(patch).where(eq(s.tool.id, t.id));
+  }
+
+  // slug único (sufixa se colidir com outro MCP).
+  let slug = m.slug ?? slugify(m.nome);
+  const existentes = new Set(
+    (await db.select().from(s.conexaoMcp)).filter((x: any) => x.id !== id && x.slug).map((x: any) => x.slug)
+  );
+  if (existentes.has(slug)) slug = `${slug}-${id.slice(0, 6)}`;
+
+  await db
+    .update(s.conexaoMcp)
+    .set({ slug, proposito: plano?.proposito ?? m.descricao ?? m.nome, geradoEm: new Date(), status: "conectado" })
+    .where(eq(s.conexaoMcp.id, id));
+  await audit(me, "gerar_mcp", `mcp:${m.nome}`, { slug, tools: tools.length });
+
+  const base = process.env.APP_URL ?? process.env.URL ?? "";
+  return c.json({ ok: true, slug, endpoint: `${base}/api/mcp/${slug}`, tools: tools.length });
 });
 
 export default app;

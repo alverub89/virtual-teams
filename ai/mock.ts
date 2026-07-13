@@ -16,7 +16,55 @@ const RESPOSTAS: [RegExp, string][] = [
 const FALLBACK =
   "Entendi. Com o contexto desta etapa e o histórico da iniciativa, sugiro seguirmos assim:\n\n1. Valido as premissas com os dados da capacidade\n2. Preparo o artefato desta etapa para sua revisão\n3. Deixo registrado o racional para auditoria\n\nQuer que eu detalhe algum ponto antes de gerar o artefato?";
 
+// Deriva um JSON Schema simples a partir da descrição em linguagem natural dos
+// parâmetros (fragmentos separados por vírgula/;/quebra de linha viram campos).
+function schemaDeTexto(parametros: string): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  const req: string[] = [];
+  // Protege vírgulas dentro de parênteses (são descrição, não separador de campos).
+  const protegido = String(parametros).replace(/\([^)]*\)/g, (m) => m.replace(/,/g, "§"));
+  for (const bruto of protegido.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    const parte = bruto.replace(/§/g, ",");
+    const nome = (parte.split(/[:=(-]/)[0] || parte).trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_|_$/g, "");
+    if (!nome) continue;
+    const tipo = /\b(quant|número|numero|valor|idade|total|count)\b/i.test(parte)
+      ? "number"
+      : /\b(lista|array|itens)\b/i.test(parte)
+        ? "array"
+        : /\b(sim\/não|booleano|flag|ativo)\b/i.test(parte)
+          ? "boolean"
+          : "string";
+    props[nome] = tipo === "array" ? { type: "array", items: { type: "string" }, description: parte } : { type: tipo, description: parte };
+    if (!/opcional|optional/i.test(parte)) req.push(nome);
+  }
+  return { type: "object", properties: props, ...(req.length ? { required: req } : {}) };
+}
+
+// Detecta o pedido do construtor de MCP e devolve um manifesto JSON válido —
+// para o fluxo "gerar com IA" funcionar em modo demo (sem gateway real).
+function talvezMcpJson(req: ChatRequest): string | null {
+  if (!/servidores? MCP|Model Context Protocol/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const m = ultima.match(/Tools:\s*(\[[\s\S]*?\])\s*\n\n/);
+  let tools: any[] = [];
+  try { tools = m ? JSON.parse(m[1]) : []; } catch { tools = []; }
+  const nomeMcp = (ultima.match(/MCP:\s*"([^"]+)"/) || [])[1] ?? "MCP";
+  return JSON.stringify({
+    proposito: `Conjunto de tools de ${nomeMcp} exposto via MCP para os agentes.`,
+    tools: tools.map((t: any) => ({
+      nome: t.nome,
+      inputSchema: schemaDeTexto(t.parametros ?? ""),
+      promptHandler:
+        t.execucao === "ia"
+          ? `Você executa a tool "${t.nome}": ${t.descricao ?? ""}. Use os parâmetros recebidos e responda de forma objetiva e útil.`
+          : "",
+    })),
+  });
+}
+
 function responder(req: ChatRequest): string {
+  const mcp = talvezMcpJson(req);
+  if (mcp) return mcp;
   const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const contexto = `${req.system}\n${ultima}`;
   for (const [re, resp] of RESPOSTAS) if (re.test(contexto)) return resp;
