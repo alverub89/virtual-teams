@@ -47,10 +47,10 @@ export default function JornadaPage() {
   const etapa = ini?.etapas.find((e) => e.ordem === etapaSel);
 
   const concluir = useMutation({
-    mutationFn: () => post(`/iniciativas/${codigo}/etapas/${etapaSel}/concluir`),
+    mutationFn: () => post<{ ok: boolean; docId?: string }>(`/iniciativas/${codigo}/etapas/${etapaSel}/concluir`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["iniciativa", codigo] });
-      toast(`✅ Etapa ${etapa?.nome} concluída`);
+      toast(`✅ Etapa ${etapa?.nome} concluída — 📄 documento gerado em Documentação`);
       setSel(null);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),

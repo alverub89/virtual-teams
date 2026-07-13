@@ -142,6 +142,65 @@ const TAREFA_POR_ETAPA: Record<number, TipoTarefa> = {
   6: "classificacao",
 };
 
+// Cada etapa da jornada ENTREGA um documento formal (armazenado em `documento`,
+// visível em Documentação). Metadados do documento por etapa.
+const DOC_ETAPA: Record<number, { tipo: string; emoji: string; titulo: (t: string) => string; foco: string }> = {
+  1: { tipo: "doc", emoji: "📋", titulo: (t) => `Brief — ${t}`, foco: "um brief de descoberta (problema, objetivo, público, escopo, hipóteses, métricas de sucesso e riscos)" },
+  2: { tipo: "prd", emoji: "📄", titulo: (t) => `PRD — ${t}`, foco: "um PRD (contexto, requisitos funcionais e não-funcionais, fluxos de usuário, critérios de aceite e o que está fora de escopo)" },
+  3: { tipo: "adr", emoji: "🏛️", titulo: (t) => `Arquitetura — ${t}`, foco: "um documento de arquitetura/ADR (decisões, componentes, integrações, dados, trade-offs e guard rails)" },
+  4: { tipo: "doc", emoji: "📝", titulo: (t) => `Histórias — ${t}`, foco: "um backlog de histórias no formato INVEST, cada uma com critérios de aceite e estimativa" },
+  5: { tipo: "guia", emoji: "🛠️", titulo: (t) => `Notas de desenvolvimento — ${t}`, foco: "notas de desenvolvimento (abordagem técnica, decomposição em tarefas, pontos de atenção e estratégia de testes)" },
+  6: { tipo: "doc", emoji: "🚀", titulo: (t) => `Plano de release e GMUD — ${t}`, foco: "um plano de release e GMUD (janela, nível de risco, plano de rollback, checklist de deploy e evidências)" },
+};
+
+// Gera (via IA) o documento formal da etapa a partir do contexto + conversa e
+// o persiste em `documento`. Retorna o registro criado. Tolerante a falha da
+// IA: cai para um documento montado a partir da própria conversa.
+async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome: string, ag: any): Promise<any> {
+  const cfg = DOC_ETAPA[ordem] ?? { tipo: "doc", emoji: "📄", titulo: (t: string) => `${etapaNome} — ${t}`, foco: `o artefato da etapa "${etapaNome}"` };
+  const titulo = cfg.titulo(ini.titulo);
+  const historico = await db
+    .select()
+    .from(s.mensagemChat)
+    .where(and(eq(s.mensagemChat.iniciativaId, ini.id), eq(s.mensagemChat.etapaOrdem, ordem)))
+    .orderBy(asc(s.mensagemChat.criadoEm));
+  const transcript = historico.map((m: any) => `${m.autorNome}: ${m.conteudo}`).join("\n");
+
+  let markdown = "";
+  try {
+    const provider = await getProvider();
+    const model = await resolveModel(TAREFA_POR_ETAPA[ordem] ?? "resumo");
+    const system =
+      `Você é ${ag?.nome ?? "o agente da etapa"}. Produza um DOCUMENTO FORMAL em Markdown: ${cfg.foco}. ` +
+      "Use títulos (##), listas e tabelas quando ajudar. Seja específico e acionável. " +
+      "Entregue SOMENTE o documento final, em português — sem saudações, sem conversa e sem meta-comentários.";
+    const user =
+      `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n` +
+      `Conversa da etapa (fonte):\n${transcript || "(sem conversa registrada; gere o documento a partir do contexto acima)"}`;
+    const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 1600, temperature: 0.3 });
+    markdown = (res.content ?? "").trim();
+  } catch {
+    markdown = "";
+  }
+  if (!markdown) {
+    markdown = `## ${titulo}\n\n_Documento gerado a partir da conversa da etapa._\n\n${transcript || "Sem conteúdo registrado nesta etapa."}`;
+  }
+  const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 180) ?? titulo;
+
+  const [doc] = await db.insert(s.documento).values({
+    squadId: ini.squadId,
+    iniciativaId: ini.id,
+    titulo,
+    tipo: cfg.tipo,
+    emoji: cfg.emoji,
+    resumo,
+    conteudo: markdown,
+    autorNome: ag?.nome ?? "Agente da etapa",
+    escopo: "squad",
+  }).returning();
+  return doc;
+}
+
 /* Chat com o agente da etapa — streaming SSE (docs/spec §8.5). */
 app.post("/:codigo/chat", async (c) => {
   const me = c.get("me");
@@ -182,7 +241,10 @@ app.post("/:codigo/chat", async (c) => {
     personalidade: `${ag.personalidade}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}`,
     skills: agSkills,
     tools: agTools.map((t: any) => ({ ...t, descricao: t.descricao ?? "" })),
-    guardRails: ["Responda em português, direto ao ponto, no contexto da etapa."],
+    guardRails: [
+      "Responda em português, direto ao ponto, no contexto da etapa.",
+      "Ao concluir esta etapa, um DOCUMENTO FORMAL é gerado e salvo em Documentação a partir desta conversa — nunca diga que você não cria documentos. Ajude a construir o conteúdo desse documento; se pedirem para vê-lo, oriente a concluir a etapa para gerá-lo (ou apresente uma prévia do documento).",
+    ],
   });
 
   const historico = await db
@@ -288,15 +350,25 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
     .select()
     .from(s.iniciativaEtapa)
     .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
+  const [ag] = etapaRow?.agenteId
+    ? await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId))
+    : [null];
+
+  // Toda etapa ENTREGA um documento formal, gerado pelo agente e armazenado em
+  // Documentação (visível na jornada e em /squad/docs).
+  const doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
 
   await db
     .update(s.iniciativaEtapa)
     .set({
       status: "concluida",
       concluidaEm: new Date(),
-      artefato: etapaRow.artefato ?? {
-        titulo: `${etapaRow.nome} — concluída`,
-        secoes: [{ h: "Registro", itens: [`Etapa concluída por ${me.nome} com apoio do agente.`] }],
+      artefato: {
+        titulo: doc.titulo,
+        secoes: [
+          { h: "Documento gerado", itens: [`${doc.emoji ?? "📄"} ${doc.titulo} — por ${doc.autorNome}. Disponível em Documentação.`] },
+          ...(doc.resumo ? [{ h: "Resumo", itens: [doc.resumo] }] : []),
+        ],
       },
     })
     .where(eq(s.iniciativaEtapa.id, etapaRow.id));
@@ -314,8 +386,8 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
       .set({ status: "em_andamento" })
       .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
   }
-  await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome });
-  return c.json({ ok: true, proximaEtapa: proxima <= 6 ? proxima : null });
+  await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome, docId: doc.id });
+  return c.json({ ok: true, proximaEtapa: proxima <= 6 ? proxima : null, docId: doc.id });
 });
 
 export default app;
