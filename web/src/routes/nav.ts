@@ -37,6 +37,20 @@ export const SQUAD_NAV: NavSection[] = [
         fase: "Fase 1",
       },
       {
+        path: "/squad/time",
+        label: "Time & Squad",
+        title: "Time & Squad",
+        description: "Membros, convites e repositórios da sua squad.",
+        fase: "Fase 1",
+      },
+      {
+        path: "/squad/assistente",
+        label: "Assistente",
+        title: "Assistente",
+        description: "Converse com um agente para tirar dúvidas ou explorar ideias.",
+        fase: "Fase 1",
+      },
+      {
         path: "/squad/okrs",
         label: "OKRs",
         title: "OKRs",

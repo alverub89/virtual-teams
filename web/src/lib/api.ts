@@ -35,6 +35,39 @@ export function useMe() {
   });
 }
 
+/* Bate-papo livre com um agente (SSE). historico = mensagens anteriores. */
+export async function streamAssistente(
+  agenteId: string | undefined,
+  mensagem: string,
+  historico: { role: "user" | "assistant"; content: string }[],
+  onDelta: (delta: string) => void
+): Promise<void> {
+  const res = await fetch(`/api/assistente/chat`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ agenteId, mensagem, historico }),
+  });
+  if (!res.ok || !res.body) throw new ApiError(res.status, "falha no assistente");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const eventos = buffer.split("\n\n");
+    buffer = eventos.pop() ?? "";
+    for (const ev of eventos) {
+      const payload = ev.replace(/^data: /, "").trim();
+      if (!payload) continue;
+      const data = JSON.parse(payload) as { delta?: string; error?: string };
+      if (data.error) throw new ApiError(500, data.error);
+      if (data.delta) onDelta(data.delta);
+    }
+  }
+}
+
 /* Consome o SSE do chat (POST + ReadableStream). */
 export async function streamChat(
   codigo: string,
