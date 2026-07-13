@@ -27,53 +27,59 @@ export async function resolveNeonUrl(): Promise<{ url?: string; source: string }
   return { source: "none" };
 }
 
-// Provisiona o schema no Neon. Marcador de conclusão: a tabela `convite`
-// (última do DDL). Se ela existir, o schema está completo → não mexe.
-// Se não, recria do zero numa única conexão (rápido e atômico) — seguro
-// porque não há dado real antes do provisionamento concluir.
+// Aplica as migrations pendentes no Neon de forma incremental e idempotente,
+// com uma tabela de tracking (_migrations). Nunca apaga dados — statements que
+// já existem (tabela/coluna/constraint) são ignorados. Serve tanto para banco
+// novo quanto para evoluir um já provisionado.
 async function ensureSchema(url: string) {
-  const { neon } = await import("@neondatabase/serverless");
-  const { drizzle } = await import("drizzle-orm/neon-http");
-  const { sql } = await import("drizzle-orm");
-  const dbHttp = drizzle(neon(url));
+  const { MIGRATIONS } = await import("./bootstrap-ddl");
+  const ignoravel = (e: any) => {
+    const code = e?.code ?? e?.cause?.code;
+    const msg = String(e?.message ?? "");
+    return ["42P06", "42P07", "42701", "42710", "42P16", "42P16"].includes(code) || /already exists|duplicate/i.test(msg);
+  };
 
-  try {
-    const r: any = await dbHttp.execute(
-      sql.raw(
-        "select 1 as ok from information_schema.tables where table_schema='ai_workspace' and table_name='convite' limit 1"
-      )
-    );
-    const rows = r?.rows ?? r;
-    if (Array.isArray(rows) && rows.length > 0) return; // já provisionado
-  } catch {
-    /* segue para provisionar */
-  }
-
-  const { DDL } = await import("./bootstrap-ddl");
-  const stmts = DDL.split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
-  const runAll = async (run: (s: string) => Promise<unknown>) => {
-    await run('DROP SCHEMA IF EXISTS "ai_workspace" CASCADE');
-    for (const stmt of stmts) {
-      try {
-        await run(stmt);
-      } catch (err: any) {
-        console.error("[ensureSchema]", String(err?.message ?? err).slice(0, 140));
+  const aplicar = async (run: (s: string) => Promise<unknown>, query: (s: string) => Promise<any[]>) => {
+    await run('CREATE SCHEMA IF NOT EXISTS "ai_workspace"');
+    await run('CREATE TABLE IF NOT EXISTS "ai_workspace"."_migrations" (name text PRIMARY KEY, applied_at timestamptz DEFAULT now())');
+    const rows = await query('SELECT name FROM "ai_workspace"."_migrations"').catch(() => []);
+    const aplicadas = new Set((rows ?? []).map((r: any) => r.name));
+    for (const mig of MIGRATIONS) {
+      if (aplicadas.has(mig.name)) continue;
+      const stmts = mig.sql.split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean);
+      for (const stmt of stmts) {
+        try {
+          await run(stmt);
+        } catch (err: any) {
+          if (!ignoravel(err)) console.error("[migrations]", mig.name, String(err?.message ?? err).slice(0, 120));
+        }
       }
+      await run(`INSERT INTO "ai_workspace"."_migrations"(name) VALUES ('${mig.name}') ON CONFLICT (name) DO NOTHING`);
     }
   };
 
-  // Preferência: Pool (WebSocket, 1 conexão — rápido). Fallback: HTTP (drizzle).
+  // Preferência: Pool (WebSocket, 1 conexão). Fallback: HTTP (drizzle).
   try {
     const { Pool } = await import("@neondatabase/serverless");
     const pool = new Pool({ connectionString: url });
     try {
-      await runAll((s) => pool.query(s));
+      await aplicar((s) => pool.query(s), async (s) => (await pool.query(s)).rows);
     } finally {
       await pool.end();
     }
   } catch (err: any) {
-    console.error("[ensureSchema] Pool indisponível, fallback HTTP:", String(err?.message ?? err).slice(0, 100));
-    await runAll((s) => dbHttp.execute(sql.raw(s)));
+    console.error("[migrations] Pool indisponível, fallback HTTP:", String(err?.message ?? err).slice(0, 100));
+    const { neon } = await import("@neondatabase/serverless");
+    const { drizzle } = await import("drizzle-orm/neon-http");
+    const { sql } = await import("drizzle-orm");
+    const dbHttp = drizzle(neon(url));
+    await aplicar(
+      (s) => dbHttp.execute(sql.raw(s)),
+      async (s) => {
+        const r: any = await dbHttp.execute(sql.raw(s));
+        return r?.rows ?? r ?? [];
+      }
+    );
   }
 }
 
