@@ -38,7 +38,7 @@ export default function CfgHome() {
       <PageHead
         title={data?.comunidade ? data.comunidade.nome : "Console da plataforma"}
         description="Monte a base que abastece as squads e acompanhe como estão indo."
-        actions={<Link to="/console/convites" className="btn primary" style={{ textDecoration: "none" }}>+ Convidar pessoa</Link>}
+        actions={<><Link to="/popular-demo" className="btn" style={{ textDecoration: "none" }}>🚀 Popular demo</Link><Link to="/console/convites" className="btn primary" style={{ textDecoration: "none" }}>+ Convidar pessoa</Link></>}
       />
 
       <Card className="cfg-checklist" pad>

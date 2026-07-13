@@ -26,6 +26,7 @@ import Agentes, { AgenteEdit } from "./routes/console/Agentes";
 import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plataforma";
 import McpDetalhe from "./routes/console/McpDetalhe";
 import Playground from "./routes/console/Playground";
+import PopularDemo from "./routes/PopularDemo";
 import Indicadores from "./routes/gestao/Indicadores";
 import { DocsComunidade, DocsFeatures } from "./routes/gestao/DocsGestao";
 
@@ -38,6 +39,7 @@ export default function App() {
 
         <Route element={<RequireAuth />}>
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/popular-demo" element={<PopularDemo />} />
           <Route path="/" element={<Entry />} />
 
           <Route

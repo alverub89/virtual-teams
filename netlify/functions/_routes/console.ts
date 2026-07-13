@@ -1,10 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
+import { setCookie } from "hono/cookie";
 import { getDb, schema as s } from "../../../db/client";
 import { rbac } from "../_mw/rbac";
 import { audit } from "../_lib/audit";
 import { composeSystemPrompt } from "../../../ai/prompts";
+import { signSession, sessionCookieName, cookieOpts } from "../_mw/auth";
+import { meDaPessoa } from "./auth";
 
 // Console da plataforma — leitura para todos os papéis com acesso; escrita
 // exige papel arquiteto (docs/spec §6.2).
@@ -871,6 +874,37 @@ app.post("/playground/registrar-mercado", cfg, async (c) => {
   });
   await audit(me, "registrar_mcp_mercado", `mcp:${mm.nome}`);
   return c.json({ ok: true });
+});
+
+/* ---------- Seed de demonstração: popula a squad e renova a sessão ---------- */
+
+// Popula o time + a squad de demo na comunidade do usuário logado, torna o
+// usuário tech lead dessa squad e RENOVA o cookie de sessão (sem precisar
+// deslogar). Roda dentro do app — usa o mesmo banco que a aplicação lê.
+app.post("/seed-demo", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const { seedDemoSquad } = await import("../_lib/seed-demo");
+  const { squadId, counts } = await seedDemoSquad(db, me.id);
+
+  await db.update(s.pessoa).set({ papel: "tech_lead", squadId, onboardingConcluido: true }).where(eq(s.pessoa.id, me.id));
+  const [p] = await db.select().from(s.pessoa).where(eq(s.pessoa.id, me.id));
+  const novoMe = await meDaPessoa(db, p);
+  setCookie(c, sessionCookieName, await signSession(novoMe), cookieOpts());
+  counts.membros = (await db.select().from(s.pessoa)).filter((x: any) => x.squadId === squadId).length;
+  await audit(me, "seed_demo", `squad:${squadId}`, counts);
+  return c.json({ ok: true, counts, me: novoMe });
+});
+
+// Volta o usuário para CTO (renova a sessão). Reversão do seed-demo.
+app.post("/voltar-cto", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  await db.update(s.pessoa).set({ papel: "cto", squadId: null }).where(eq(s.pessoa.id, me.id));
+  const [p] = await db.select().from(s.pessoa).where(eq(s.pessoa.id, me.id));
+  const novoMe = await meDaPessoa(db, p);
+  setCookie(c, sessionCookieName, await signSession(novoMe), cookieOpts());
+  return c.json({ ok: true, me: novoMe });
 });
 
 export default app;
