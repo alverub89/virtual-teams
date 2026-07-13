@@ -118,6 +118,23 @@ export const PLAYGROUND_TOOLS: SeedTool[] = [
     exemplo: {},
   },
   {
+    nome: "perguntar_sobre_repo",
+    descricao: "Responde uma pergunta sobre um repositório GitHub usando o README real + a SUA IA (Omni). Dado processado na sua infra.",
+    permissao: "leitura",
+    execucao: "ia",
+    parametros: "repo (owner/repo, ex.: bmad-code-org/BMAD-METHOD), pergunta",
+    inputSchema: obj({ repo: str("owner/repo, ex.: bmad-code-org/BMAD-METHOD"), pergunta: str("o que você quer saber sobre o repositório") }, ["repo", "pergunta"]),
+    handlerConfig: {
+      prompt:
+        "Você é um engenheiro que analisa repositórios. Responda a pergunta APENAS com base no contexto real fornecido " +
+        "(o README do repositório). Se a resposta não estiver no contexto, diga que não encontrou. Seja objetivo e cite trechos quando útil.",
+      contextoUrl: "https://api.github.com/repos/{{repo}}/readme",
+      contextoHeaders: { Accept: "application/vnd.github.raw+json", "User-Agent": "AI-Workspace" },
+      maxTokens: 900,
+    },
+    exemplo: { repo: "bmad-code-org/BMAD-METHOD", pergunta: "Quais são as fases e os agentes do método?" },
+  },
+  {
     nome: "explicar_para_cliente",
     descricao: "Explica um conceito financeiro em linguagem simples para um público (tool de IA).",
     permissao: "leitura",

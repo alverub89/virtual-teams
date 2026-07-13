@@ -84,16 +84,34 @@ export async function executarTool(
     }
 
     // execucao "ia": usa o prompt do handler + os argumentos como contexto.
+    // Se o handler declara um contextoUrl, o app busca esse conteúdo real
+    // (ex.: README de um repo) e injeta como contexto ANTES de chamar o Omni —
+    // a inteligência roda na infra própria, com dado de verdade (RAG-lite).
     const cfg = tool.handlerConfig ?? {};
+    let contexto = "";
+    if (cfg.contextoUrl) {
+      try {
+        const url = interpolar(cfg.contextoUrl, args);
+        const res = await fetch(url, { headers: interpolar(cfg.contextoHeaders ?? {}, args) as Record<string, string> });
+        contexto = res.ok
+          ? (await res.text()).slice(0, cfg.contextoMax ?? 8000)
+          : `(contexto indisponível: HTTP ${res.status})`;
+      } catch (e) {
+        contexto = `(contexto indisponível: ${e instanceof Error ? e.message : String(e)})`;
+      }
+    }
     const system =
       cfg.prompt ??
       `Você executa a tool "${tool.nome}": ${tool.descricao ?? ""}. Responda de forma direta e útil ao pedido, usando os parâmetros fornecidos.`;
     const provider = await getProvider();
     const model = await resolveModel("historias");
+    const userContent = contexto
+      ? `Contexto real:\n"""\n${contexto}\n"""\n\nParâmetros (JSON): ${JSON.stringify(args)}`
+      : `Parâmetros (JSON): ${JSON.stringify(args)}`;
     const res = await provider.chat({
       model,
       system,
-      messages: [{ role: "user", content: `Parâmetros (JSON): ${JSON.stringify(args)}` }],
+      messages: [{ role: "user", content: userContent }],
       maxTokens: cfg.maxTokens ?? 800,
       temperature: cfg.temperature ?? 0.4,
     });

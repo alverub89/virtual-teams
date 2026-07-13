@@ -90,7 +90,7 @@ export default function Playground() {
 
   const provisionar = useMutation({
     mutationFn: () => post<{ endpoint: string; total: number; toolsNovas: number }>("/console/playground/provisionar"),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["playground"] }); qc.invalidateQueries({ queryKey: ["mcps"] }); toast(`🎮 Playground pronto — ${r.total} tools reais, vivo no endpoint`); },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["playground"] }); qc.invalidateQueries({ queryKey: ["mcps"] }); toast(r.toolsNovas > 0 ? `🎮 ${r.toolsNovas} nova(s) tool(s) adicionada(s) — total ${r.total}` : `🎮 Playground já sincronizado — ${r.total} tools`); },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
@@ -111,7 +111,7 @@ export default function Playground() {
         description="Um MCP real, pronto para demonstração: tools que batem em APIs públicas de verdade (bancos, PIX, CEP, CNPJ, câmbio, feriados) e um catálogo dos MCPs do mercado."
         actions={
           data?.provisionado
-            ? <Link to="/console/mcps" className="btn" style={{ textDecoration: "none" }}>Ver em MCPs →</Link>
+            ? <><Button onClick={() => provisionar.mutate()}>{provisionar.isPending ? "Sincronizando…" : "Sincronizar tools"}</Button><Link to="/console/mcps" className="btn" style={{ textDecoration: "none" }}>Ver em MCPs →</Link></>
             : <Button variant="primary" onClick={() => provisionar.mutate()}>{provisionar.isPending ? "Provisionando…" : "🎮 Provisionar playground"}</Button>
         }
       />
