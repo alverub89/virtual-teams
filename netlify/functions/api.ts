@@ -30,6 +30,40 @@ app.get("/health/db", async (c) => {
   const { dbDiagnostics } = await import("../../db/client");
   return c.json(await dbDiagnostics());
 });
+
+// Diagnóstico do provedor de IA: mostra qual provedor está ativo e faz uma
+// chamada REAL de teste ao gateway (latência + erro exato se falhar).
+app.get("/health/ai", async (c) => {
+  const kind = process.env.AI_GATEWAY_KIND ?? "omni";
+  const temChave = !!(process.env.OMNI_PRODUCT_KEY || process.env.AI_API_KEY);
+  const baseUrl = process.env.AI_BASE_URL ?? null;
+  const usaMock = !baseUrl || (kind === "omni" && !temChave);
+  const info = {
+    provedor: usaMock ? "mock" : kind,
+    baseUrl,
+    gatewayProvider: process.env.AI_GATEWAY_PROVIDER ?? "openai",
+    temChave,
+    usaMock,
+  };
+  if (usaMock) {
+    return c.json({ ...info, ok: false, aviso: "Rodando no MOCK (sem OMNI_PRODUCT_KEY ou AI_BASE_URL). Respostas não são reais." });
+  }
+  try {
+    const { getProvider } = await import("../../ai/provider");
+    const { resolveModel } = await import("../../ai/router");
+    const provider = await getProvider();
+    const t0 = Date.now();
+    const res = await provider.chat({
+      model: await resolveModel("resumo"),
+      system: "Responda em 1 palavra.",
+      messages: [{ role: "user", content: "Diga: ok" }],
+      maxTokens: 5,
+    });
+    return c.json({ ...info, ok: true, latenciaMs: Date.now() - t0, amostra: (res.content ?? "").slice(0, 60), tokens: res.usage });
+  } catch (e) {
+    return c.json({ ...info, ok: false, erro: e instanceof Error ? e.message : String(e) }, 502);
+  }
+});
 app.route("/auth", authRoutes); // públicas (config, demo, callback OAuth, logout)
 app.route("/mcp", mcpLive); // servidor MCP vivo por slug — público (clientes MCP externos)
 
