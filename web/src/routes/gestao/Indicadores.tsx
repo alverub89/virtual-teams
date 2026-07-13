@@ -13,6 +13,8 @@ interface Indicadores {
     squadsEmAlerta?: number;
   };
   fluxo: { etapa: string; iniciativas: number }[];
+  leadTimePorEtapa: { etapa: string; dias: number; amostra: number }[];
+  masterCobertura: { total: number; revisados: number; pct: number | null; notaMedia: number | null };
   consumoPorSquad: { squad: string; tokens: number; custo: number; budget: number | null; pct: number | null; alerta: boolean }[];
   gmuds90d: { numero: string; titulo: string; status: string; janela: string | null }[];
   progressoKrs: { descricao: string; progresso: number }[];
@@ -61,6 +63,33 @@ export default function Indicadores() {
             </div>
           ))}
           <div className="axis-note">defina o teto por squad no Console; alerta a partir de 80%</div>
+        </div>
+      </div>
+
+      <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
+        <div className="card viz">
+          <h3>Lead time por etapa do método</h3>
+          <div className="sub">onde está o gargalo real — média de dias em cada fase</div>
+          {(data?.leadTimePorEtapa ?? []).length === 0 && <p className="sub">Sem etapas concluídas ainda.</p>}
+          <HBar rows={(data?.leadTimePorEtapa ?? []).map((e) => ({ label: `${e.etapa} (${e.amostra})`, value: e.dias }))} />
+          <div className="axis-note">dias médios por fase · (n) = iniciativas na amostra</div>
+        </div>
+        <div className="card viz">
+          <h3>Validação pelo Agente Master</h3>
+          <div className="sub">documentos da execução autônoma que passaram pela crítica do Master</div>
+          {data && data.masterCobertura.total === 0 ? (
+            <p className="sub" style={{ marginTop: 10 }}>Nenhum passo autônomo concluído ainda — a cobertura aparece quando houver execução autônoma.</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap" }}>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.masterCobertura.pct ?? "—"}%</div><div className="sub">com checkpoint do Master</div></div>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.masterCobertura.notaMedia ?? "—"}</div><div className="sub">nota média (0–10)</div></div>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data ? `${data.masterCobertura.revisados}/${data.masterCobertura.total}` : "—"}</div><div className="sub">passos revisados</div></div>
+              </div>
+              <div className="meter" style={{ marginTop: 12 }}><i style={{ width: `${data?.masterCobertura.pct ?? 0}%` }} /></div>
+              <div className="axis-note">o restante seguiu sem revisão crítica registrada</div>
+            </>
+          )}
         </div>
       </div>
 

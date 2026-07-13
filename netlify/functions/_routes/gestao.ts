@@ -16,6 +16,7 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
   const krs = await db.select().from(s.keyResult);
   const medicoes = await db.select().from(s.krMedicao);
   const etapas = await db.select().from(s.iniciativaEtapa);
+  const execPassos = await db.select().from(s.execucaoPasso);
 
   const etapaNomes = ["Brief", "PRD", "Arquitetura", "Histórias", "Desenvolvimento", "Esteira & GMUD"];
   const fluxo = etapaNomes.map((nome, idx) => ({
@@ -51,6 +52,39 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
   }).filter((d: number | null): d is number => d != null);
   const leadTimeDias = leadTimes.length ? Math.round(leadTimes.reduce((a: number, b: number) => a + b, 0) / leadTimes.length) : null;
 
+  // Lead time POR ETAPA: como não há "iniciada em", a duração de cada etapa é
+  // o intervalo entre a conclusão da anterior (ou a criação da iniciativa) e a
+  // sua própria conclusão. Média por nome de etapa, em dias.
+  const acumEtapa: Record<string, { soma: number; n: number }> = {};
+  for (const i of inis as any[]) {
+    const ets = etapas.filter((e: any) => e.iniciativaId === i.id && e.concluidaEm)
+      .sort((a: any, b: any) => a.ordem - b.ordem);
+    let prev = new Date(i.criadoEm).getTime();
+    for (const e of ets) {
+      const fim = new Date(e.concluidaEm).getTime();
+      const dias = Math.max(0, (fim - prev) / 86400000);
+      (acumEtapa[e.nome] ??= { soma: 0, n: 0 });
+      acumEtapa[e.nome].soma += dias;
+      acumEtapa[e.nome].n += 1;
+      prev = fim;
+    }
+  }
+  const leadTimePorEtapa = etapaNomes
+    .filter((nome) => acumEtapa[nome])
+    .map((nome) => ({ etapa: nome, dias: Math.round((acumEtapa[nome].soma / acumEtapa[nome].n) * 10) / 10, amostra: acumEtapa[nome].n }));
+
+  // Cobertura do Agente Master: dos passos concluídos na execução autônoma,
+  // quantos passaram pela crítica do Master (têm parecer/nota registrado).
+  const passosConcluidos = execPassos.filter((p: any) => p.status === "concluido");
+  const comMaster = passosConcluidos.filter((p: any) => p.saida?.revisao);
+  const notas = comMaster.map((p: any) => p.saida.revisao.nota).filter((n: any) => typeof n === "number");
+  const masterCobertura = {
+    total: passosConcluidos.length,
+    revisados: comMaster.length,
+    pct: passosConcluidos.length ? Math.round((comMaster.length / passosConcluidos.length) * 100) : null,
+    notaMedia: notas.length ? Math.round((notas.reduce((a: number, b: number) => a + b, 0) / notas.length) * 10) / 10 : null,
+  };
+
   // Consumo x orçamento por squad (mês corrente) com alerta de estouro.
   const mesAtual = new Date().toISOString().slice(0, 7);
   const consumoPorSquad = squads.map((sq: any) => {
@@ -73,6 +107,8 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
       squadsEmAlerta: consumoPorSquad.filter((x: any) => x.alerta).length,
     },
     fluxo,
+    leadTimePorEtapa,
+    masterCobertura,
     consumoPorSquad,
     gmuds90d: gmuds.map((g: any) => ({ numero: g.numero, titulo: g.titulo, status: g.status, janela: g.janela })),
     okrs: okrs.map((o: any) => ({ escopo: o.escopo, objetivo: o.objetivo })),
