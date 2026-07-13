@@ -14,7 +14,12 @@ interface Artigo {
   autorNome: string;
   criadoEm: string;
   endossos: string[];
+  status?: string;
+  origem?: string;
+  repo?: string | null;
+  progresso?: string | null;
 }
+interface ReposDisp { repos: { id: string; nome: string; linguagem: string | null }[]; temToken: boolean }
 
 const ESCOPOS = [
   { key: "", label: "Todos" },
@@ -34,10 +39,26 @@ export default function Kb() {
   const [resumo, setResumo] = useState("");
   const [conteudo, setConteudo] = useState("");
   const [escopoNovo, setEscopoNovo] = useState("squad");
+  const [gerando, setGerando] = useState(false);
+  const [repoSel, setRepoSel] = useState("");
+  const [escopoRepo, setEscopoRepo] = useState("squad");
 
   const { data: artigos } = useQuery<Artigo[]>({
     queryKey: ["kb", escopo],
     queryFn: () => api(`/kb${escopo ? `?escopo=${escopo}` : ""}`),
+    // enquanto houver artigo "gerando", atualiza sozinho
+    refetchInterval: (q) => (q.state.data?.some((a) => a.status === "gerando") ? 4000 : false),
+  });
+  const { data: reposDisp } = useQuery<ReposDisp>({ queryKey: ["kb-repos"], queryFn: () => api("/kb/repos-disponiveis") });
+
+  const gerarDeRepo = useMutation({
+    mutationFn: () => post<Artigo>("/kb/gerar-de-repo", { repo: repoSel, escopo: escopoRepo }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kb"] });
+      setGerando(false); setRepoSel("");
+      toast("🤖 Gerando documentação do repositório…");
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
   const publicar = useMutation({
@@ -55,11 +76,16 @@ export default function Kb() {
     <>
       <PageHead
         title="Base de Conhecimento"
-        description="Aprendizados da squad publicados por escopo. Artigos endossados valem para o release train ou a comunidade inteira."
+        description="Aprendizados da squad publicados por escopo. Gere documentação a partir dos repositórios para dar contexto ao time e aos agentes."
         actions={
-          <Button variant="primary" onClick={() => setPublicando(true)}>
-            + Publicar artigo
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={() => { setEscopoRepo("squad"); setRepoSel(reposDisp?.repos[0]?.nome ?? ""); setGerando(true); }}>
+              🤖 Gerar do repositório
+            </Button>
+            <Button variant="primary" onClick={() => setPublicando(true)}>
+              + Publicar artigo
+            </Button>
+          </div>
         }
       />
       <div className="doc-toolbar">
@@ -70,17 +96,25 @@ export default function Kb() {
         ))}
       </div>
       <div className="grid g3">
-        {artigos?.map((a) => (
-          <div key={a.id} className="kb-card" onClick={() => navigate(`/squad/kb/${a.id}`)}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <EscopoChip escopo={a.escopo} />
-              {a.endossos.length > 0 && <Chip tone="good">✓ endossado</Chip>}
+        {artigos?.map((a) => {
+          const gerandoArt = a.status === "gerando";
+          const erroArt = a.status === "erro";
+          return (
+            <div key={a.id} className="kb-card" style={gerandoArt ? { opacity: 0.75, cursor: "default" } : undefined}
+              onClick={() => !gerandoArt && navigate(`/squad/kb/${a.id}`)}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <EscopoChip escopo={a.escopo} />
+                {a.origem === "ia" && <Chip tone="blue">🤖 do repositório</Chip>}
+                {gerandoArt && <Chip tone="warn">⏳ gerando…</Chip>}
+                {erroArt && <Chip tone="crit">erro</Chip>}
+                {a.endossos.length > 0 && <Chip tone="good">✓ endossado</Chip>}
+              </div>
+              <h3>{a.titulo}</h3>
+              <p>{gerandoArt ? (a.progresso ?? "Lendo o repositório…") : erroArt ? (a.progresso ?? "Falha na geração") : a.resumo}</p>
+              <div className="kb-foot">{a.autorNome} · {new Date(a.criadoEm).toLocaleDateString("pt-BR")}</div>
             </div>
-            <h3>{a.titulo}</h3>
-            <p>{a.resumo}</p>
-            <div className="kb-foot">{a.autorNome} · {new Date(a.criadoEm).toLocaleDateString("pt-BR")}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {publicando && (
@@ -117,6 +151,48 @@ export default function Kb() {
           </Fld>
         </Modal>
       )}
+
+      {gerando && (
+        <Modal
+          title="Gerar documentação de um repositório"
+          subtitle="A IA lê a estrutura, README e arquivos principais do repositório e escreve um artigo de contexto — que fica reutilizável pelo time e pelos agentes."
+          onClose={() => setGerando(false)}
+          foot={
+            <>
+              <Button onClick={() => setGerando(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={() => repoSel && gerarDeRepo.mutate()}>
+                {gerarDeRepo.isPending ? "Iniciando…" : "🤖 Gerar"}
+              </Button>
+            </>
+          }
+        >
+          {!reposDisp?.repos.length ? (
+            <p className="sub">Nenhum repositório conectado à squad. Conecte repositórios em <Link to="/comunidade">Comunidade &amp; Pessoas</Link>.</p>
+          ) : (
+            <>
+              <Fld label="Repositório">
+                <select className="in" value={repoSel} onChange={(e) => setRepoSel(e.target.value)}>
+                  {reposDisp.repos.map((r) => (
+                    <option key={r.id} value={r.nome}>{r.nome}{r.linguagem ? ` · ${r.linguagem}` : ""}</option>
+                  ))}
+                </select>
+              </Fld>
+              <Fld label="Escopo">
+                <select className="in" value={escopoRepo} onChange={(e) => setEscopoRepo(e.target.value)}>
+                  <option value="squad">Squad {me?.squadNome ? `(${me.squadNome})` : ""}</option>
+                  <option value="release_train">Release Train</option>
+                  <option value="comunidade">Comunidade</option>
+                </select>
+              </Fld>
+              {!reposDisp.temToken && (
+                <p className="sub" style={{ marginTop: 8 }}>
+                  ⚠️ Sem token do GitHub configurado — repositórios privados podem não ser lidos. Configure o token em Capacidades.
+                </p>
+              )}
+            </>
+          )}
+        </Modal>
+      )}
     </>
   );
 }
@@ -129,6 +205,7 @@ export function KbArtigo() {
   const { data: artigo } = useQuery<Artigo & { conteudo: string }>({
     queryKey: ["kb-artigo", id],
     queryFn: () => api(`/kb/${id}`),
+    refetchInterval: (q) => (q.state.data?.status === "gerando" ? 4000 : false),
   });
 
   const endossar = useMutation({
@@ -165,7 +242,19 @@ export function KbArtigo() {
             )}
           </span>
         </div>
-        <Markdown conteudo={artigo.conteudo} />
+        {artigo.status === "gerando" ? (
+          <div className="card" style={{ textAlign: "center", padding: 28 }}>
+            <div style={{ fontSize: 30 }}>⏳</div>
+            <h3 style={{ margin: "8px 0 4px" }}>Gerando documentação…</h3>
+            <p className="sub">{artigo.progresso ?? "Lendo o repositório e sintetizando o artigo."}</p>
+          </div>
+        ) : (
+          <>
+            {artigo.status === "erro" && <div className="card" style={{ marginBottom: 12 }}>⚠️ {artigo.progresso ?? "Falha na geração."}</div>}
+            {artigo.progresso && artigo.status === "pronto" && <p className="sub" style={{ marginBottom: 8 }}>ℹ️ {artigo.progresso}</p>}
+            <Markdown conteudo={artigo.conteudo} />
+          </>
+        )}
       </div>
     </>
   );

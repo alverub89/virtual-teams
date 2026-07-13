@@ -322,6 +322,11 @@ export const kbArtigo = aiWorkspace.table("kb_artigo", {
   conteudo: text("conteudo").notNull(),
   autorId: uuid("autor_id").references(() => pessoa.id),
   autorNome: text("autor_nome").notNull(),
+  // Geração de KB a partir de repositório (documentação para contexto).
+  status: text("status").notNull().default("pronto"), // pronto|gerando|erro
+  progresso: text("progresso"),
+  origem: text("origem").notNull().default("manual"), // manual|ia
+  repo: text("repo"), // owner/repo documentado (quando origem = ia)
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 

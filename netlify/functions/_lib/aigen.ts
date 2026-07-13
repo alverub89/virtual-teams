@@ -8,17 +8,21 @@ import { resolveModel } from "../../../ai/router";
 // Extrai o primeiro objeto/array JSON de um texto (o modelo às vezes embrulha
 // em ```json ... ``` ou adiciona prosa). Lança se nada válido for achado.
 export function extrairJson(texto: string): any {
-  const limpo = texto.replace(/```json/gi, "```").trim();
-  const semCerca = limpo.includes("```") ? limpo.split("```")[1] ?? limpo : limpo;
-  const alvo = semCerca.trim();
-  try {
-    return JSON.parse(alvo);
-  } catch {
-    const ini = alvo.search(/[{[]/);
-    const fim = Math.max(alvo.lastIndexOf("}"), alvo.lastIndexOf("]"));
-    if (ini >= 0 && fim > ini) return JSON.parse(alvo.slice(ini, fim + 1));
-    throw new Error("resposta da IA não continha JSON válido");
+  const t = texto.trim();
+  // 1) tenta o texto cru primeiro — cobre JSON limpo que contém ``` DENTRO de
+  //    strings (ex.: markdown com blocos de código), que a limpeza abaixo quebra.
+  try { return JSON.parse(t); } catch { /* segue */ }
+  // 2) remove a cerca de bloco (```json … ```) e tenta o miolo.
+  const semJson = t.replace(/```json/gi, "```");
+  if (semJson.includes("```")) {
+    const dentro = semJson.split("```")[1];
+    if (dentro) { try { return JSON.parse(dentro.trim()); } catch { /* segue */ } }
   }
+  // 3) recorta do primeiro { (ou [) ao último } (ou ]).
+  const ini = t.search(/[{[]/);
+  const fim = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  if (ini >= 0 && fim > ini) return JSON.parse(t.slice(ini, fim + 1));
+  throw new Error("resposta da IA não continha JSON válido");
 }
 
 // Pede ao provedor uma resposta JSON dado um system + instrução. tarefa define

@@ -37,7 +37,7 @@ function dicaErro(status: number): string {
   return `HTTP ${status}`;
 }
 
-async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok: boolean; erro?: string; contexto: string }> {
+export async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok: boolean; erro?: string; contexto: string }> {
   // 1) metadados do repo (valida acesso e descobre o branch padrão)
   const meta = await ghGet(`${GH}/repos/${nome}`, token);
   if (!meta.ok) {

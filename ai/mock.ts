@@ -105,7 +105,25 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
+// KB a partir de repositório: gera uma documentação plausível para a demo.
+function talvezKbRepo(req: ChatRequest): string | null {
+  if (!/BASE DE CONHECIMENTO|documenta um reposit[oó]rio/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const repo = ultima.match(/reposit[oó]rio\s+(\S+)/i)?.[1] ?? "o repositório";
+  const markdown =
+    `# Documentação — ${repo}\n\n` +
+    `## Visão geral\nServiço responsável por parte do fluxo de pagamentos. Documentação de contexto gerada a partir da leitura do repositório.\n\n` +
+    `## Responsabilidades\n- Expor a API do domínio\n- Orquestrar regras de negócio\n- Persistir e conciliar dados\n\n` +
+    `## Principais módulos\n- \`src/api\` — controladores e rotas\n- \`src/domain\` — regras de negócio\n- \`src/infra\` — integrações e persistência\n\n` +
+    `## Integrações e dependências\nBanco de dados, fila de eventos e serviços internos da plataforma.\n\n` +
+    `## Como rodar\n\`\`\`bash\nnpm install && npm run dev\n\`\`\`\n\n` +
+    `## Pontos de atenção\n- Cobertura de testes nas regras críticas\n- Observabilidade das integrações externas`;
+  return JSON.stringify({ resumo: `Documentação de contexto de ${repo}: propósito, responsabilidades, módulos, integrações e como rodar.`, markdown });
+}
+
 function responder(req: ChatRequest): string {
+  const kb = talvezKbRepo(req);
+  if (kb) return kb;
   const cap = talvezCapacidades(req);
   if (cap) return cap;
   const exec = talvezAgenteExecutor(req);
