@@ -508,6 +508,9 @@ export const execucaoAutonoma = aiWorkspace.table("execucao_autonoma", {
   id: uuid("id").primaryKey().defaultRandom(),
   squadId: uuid("squad_id").notNull().references(() => squad.id),
   krId: uuid("kr_id").references(() => keyResult.id),
+  iniciativaId: uuid("iniciativa_id"), // orquestração de uma iniciativa (fluxo inteiro)
+  modo: text("modo").notNull().default("kr"), // kr | iniciativa
+  progresso: text("progresso"), // texto do passo atual (orquestrador)
   objetivo: text("objetivo").notNull(),
   status: text("status").notNull().default("em_andamento"),
   passoAtual: integer("passo_atual").notNull().default(0),

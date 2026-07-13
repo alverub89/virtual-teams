@@ -134,6 +134,13 @@
       "when": 1784130000000,
       "tag": "0018_agente_prompt_acervo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784140000000,
+      "tag": "0019_orquestrador_iniciativa",
+      "breakpoints": true
     }
   ]
 }

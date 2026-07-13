@@ -22,12 +22,49 @@ app.get("/", async (c) => {
     .where(eq(s.execucaoAutonoma.squadId, squadId))
     .orderBy(desc(s.execucaoAutonoma.criadoEm));
   const krs = await db.select().from(s.keyResult);
+  const inis = await db.select().from(s.iniciativa);
   return c.json(
     runs.map((r: any) => ({
       ...r,
       krDescricao: krs.find((k: any) => k.id === r.krId)?.descricao ?? null,
+      iniciativaCodigo: inis.find((i: any) => i.id === r.iniciativaId)?.codigo ?? null,
     }))
   );
+});
+
+/* Iniciativas da squad elegíveis para orquestração (não concluídas). */
+app.get("/iniciativas-elegiveis", async (c) => {
+  const me = c.get("me");
+  if (!me.squadId) return c.json([]);
+  const db = await getDb();
+  const inis = (await db.select().from(s.iniciativa)).filter((i: any) => i.squadId === me.squadId && i.status !== "concluida");
+  const etapas = await db.select().from(s.iniciativaEtapa);
+  return c.json(inis.map((i: any) => {
+    const ets = etapas.filter((e: any) => e.iniciativaId === i.id);
+    return { id: i.id, codigo: i.codigo, titulo: i.titulo, etapaAtual: i.etapaAtual, etapasTotal: ets.length };
+  }));
+});
+
+/* Inicia a orquestração autônoma de uma iniciativa (o agente conduz até o fim). */
+app.post("/iniciativa", rbac("iniciar_run"), async (c) => {
+  const me = c.get("me");
+  if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
+  const body = z.object({ iniciativaId: z.string().uuid() }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "iniciativaId obrigatório" }, 400);
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.id, body.data.iniciativaId));
+  if (!ini || ini.squadId !== me.squadId) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.status === "concluida") return c.json({ error: "iniciativa já concluída" }, 409);
+
+  const [exec] = await db.insert(s.execucaoAutonoma).values({
+    squadId: me.squadId, iniciativaId: ini.id, modo: "iniciativa",
+    objetivo: `Orquestrar a iniciativa ${ini.codigo} — ${ini.titulo} até concluir`,
+    status: "em_andamento", progresso: "na fila…", criadoPor: me.id,
+  }).returning();
+  const { enqueueOrquestrar } = await import("../_lib/orquestrador");
+  await enqueueOrquestrar(exec.id);
+  await audit(me, "orquestrar_iniciativa", `iniciativa:${ini.codigo}`, { execId: exec.id });
+  return c.json(exec, 202);
 });
 
 const CriarRunBody = z.object({
@@ -71,9 +108,11 @@ app.get("/:id", async (c) => {
     .from(s.execucaoCheckpoint)
     .where(eq(s.execucaoCheckpoint.execucaoId, run.id));
   const krs = await db.select().from(s.keyResult);
+  const [ini] = run.iniciativaId ? await db.select().from(s.iniciativa).where(eq(s.iniciativa.id, run.iniciativaId)) : [null];
   return c.json({
     ...run,
     krDescricao: krs.find((k: any) => k.id === run.krId)?.descricao ?? null,
+    iniciativaCodigo: ini?.codigo ?? null,
     passos,
     checkpoints,
   });

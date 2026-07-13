@@ -12,8 +12,12 @@ interface Run {
   tokensGastos: number;
   tetoTokens: number;
   krDescricao: string | null;
+  iniciativaCodigo: string | null;
+  modo?: string;
+  progresso?: string | null;
   criadoEm: string;
 }
+interface Elegivel { id: string; codigo: string; titulo: string; etapaAtual: number; etapasTotal: number }
 interface RunDetalhe extends Run {
   passos: {
     id: string;
@@ -50,6 +54,8 @@ export default function Autonoma() {
   const [novoAberto, setNovoAberto] = useState(false);
   const [objetivo, setObjetivo] = useState("");
   const [krId, setKrId] = useState("");
+  const [orqAberto, setOrqAberto] = useState(false);
+  const [iniSel, setIniSel] = useState("");
 
   const emExecucao = (r?: { status: string } | null) => r?.status === "em_andamento";
 
@@ -69,6 +75,17 @@ export default function Autonoma() {
     queryFn: () => api("/okrs"),
   });
   const krsSquad = okrs?.filter((o) => o.escopo === "squad").flatMap((o) => o.krs) ?? [];
+  const { data: elegiveis } = useQuery<Elegivel[]>({ queryKey: ["runs-elegiveis"], queryFn: () => api("/runs/iniciativas-elegiveis") });
+
+  const orquestrar = useMutation({
+    mutationFn: () => post<Run>("/runs/iniciativa", { iniciativaId: iniSel }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      setOrqAberto(false); setIniSel(""); setSelId(r.id);
+      toast("🎭 Orquestrador iniciado — vai conduzir a iniciativa até concluir");
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   const iniciar = useMutation({
     mutationFn: () => post<Run>("/runs", { objetivo, krId: krId || undefined }),
@@ -100,9 +117,14 @@ export default function Autonoma() {
         description="A squad virtual executa o plano de ponta a ponta e para nos checkpoints para a sua decisão — humano no loop, sempre."
         actions={
           (me?.papel === "pm" || me?.papel === "tech_lead") && (
-            <Button variant="primary" onClick={() => setNovoAberto(true)}>
-              ✦ Iniciar squad virtual
-            </Button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="primary" onClick={() => { setIniSel(elegiveis?.[0]?.id ?? ""); setOrqAberto(true); }}>
+                🎭 Orquestrar iniciativa
+              </Button>
+              <Button onClick={() => setNovoAberto(true)}>
+                ✦ Squad virtual (KR)
+              </Button>
+            </div>
           )
         }
       />
@@ -118,11 +140,14 @@ export default function Autonoma() {
                 style={{ cursor: "pointer", outline: selId === r.id ? "2px solid var(--accent)" : "none" }}
                 onClick={() => setSelId(r.id)}
               >
-                <Chip tone={st.tone}>{st.label}</Chip>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <Chip tone={st.tone}>{st.label}</Chip>
+                  {r.modo === "iniciativa" && <Chip tone="blue">🎭 {r.iniciativaCodigo ?? "iniciativa"}</Chip>}
+                </div>
                 <h3 style={{ marginTop: 8 }}>{r.objetivo}</h3>
                 <p className="sub">
-                  {r.krDescricao ? `KR: ${r.krDescricao} · ` : ""}
-                  {Math.round(r.tokensGastos / 1000)}k tokens
+                  {r.modo === "iniciativa" && r.progresso && r.status === "em_andamento" ? r.progresso
+                    : (r.krDescricao ? `KR: ${r.krDescricao} · ` : "") + `${Math.round(r.tokensGastos / 1000)}k tokens`}
                 </p>
               </div>
             );
@@ -138,9 +163,16 @@ export default function Autonoma() {
                 <span className="hitl">HITL · humano no loop</span>
               </div>
               <p className="sub" style={{ marginBottom: 14 }}>
-                {run.krDescricao ? `KR alvo: ${run.krDescricao} · ` : ""}
-                consumo {Math.round(run.tokensGastos / 1000)}k / teto {Math.round(run.tetoTokens / 1000)}k tokens
+                {run.modo === "iniciativa"
+                  ? `Orquestração da iniciativa ${run.iniciativaCodigo ?? ""} — o agente conduz o fluxo inteiro`
+                  : `${run.krDescricao ? `KR alvo: ${run.krDescricao} · ` : ""}consumo ${Math.round(run.tokensGastos / 1000)}k / teto ${Math.round(run.tetoTokens / 1000)}k tokens`}
               </p>
+              {run.modo === "iniciativa" && run.status === "em_andamento" && (
+                <div className="card" style={{ marginBottom: 12 }}>⏳ {run.progresso ?? "Conduzindo as etapas…"}</div>
+              )}
+              {run.modo === "iniciativa" && run.status === "concluida" && (
+                <div className="card" style={{ marginBottom: 12 }}>✅ Iniciativa concluída pelo orquestrador. Documentos disponíveis em Documentação.</div>
+              )}
               <div className="run">
                 {run.passos.map((p) => {
                   const ck = run.checkpoints.find((k) => k.passoOrdem === p.ordem && k.status === "aberto");
@@ -222,6 +254,37 @@ export default function Autonoma() {
               ))}
             </select>
           </Fld>
+        </Modal>
+      )}
+
+      {orqAberto && (
+        <Modal
+          title="🎭 Orquestrar iniciativa"
+          subtitle="Um agente orquestrador conduz o fluxo inteiro da iniciativa — concluindo cada etapa e gerando os artefatos — até terminar."
+          onClose={() => setOrqAberto(false)}
+          foot={
+            <>
+              <Button onClick={() => setOrqAberto(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={() => iniSel && orquestrar.mutate()}>
+                {orquestrar.isPending ? "Iniciando…" : "🎭 Iniciar orquestração"}
+              </Button>
+            </>
+          }
+        >
+          {!elegiveis?.length ? (
+            <p className="sub">Nenhuma iniciativa em andamento. Crie uma em Iniciativas.</p>
+          ) : (
+            <>
+              <Fld label="Iniciativa">
+                <select className="in" value={iniSel} onChange={(e) => setIniSel(e.target.value)}>
+                  {elegiveis.map((i) => (
+                    <option key={i.id} value={i.id}>{i.codigo} — {i.titulo} (etapa {i.etapaAtual}/{i.etapasTotal})</option>
+                  ))}
+                </select>
+              </Fld>
+              <p className="sub" style={{ fontSize: 12.5 }}>O orquestrador roda em segundo plano; acompanhe os passos aqui. Cada etapa gera seu documento na Documentação.</p>
+            </>
+          )}
         </Modal>
       )}
     </>

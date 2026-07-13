@@ -539,80 +539,67 @@ app.post("/:codigo/chat", async (c) => {
 });
 
 /* Concluir a etapa atual (gera artefato e avança). */
-app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) => {
-  const me = c.get("me");
-  const ordem = Number(c.req.param("ordem"));
-  const db = await getDb();
-  const [ini] = await db
-    .select()
-    .from(s.iniciativa)
-    .where(eq(s.iniciativa.codigo, c.req.param("codigo")));
-  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
-  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
-  if (ordem !== ini.etapaAtual) return c.json({ error: "só a etapa atual pode ser concluída" }, 400);
-
-  const [etapaRow] = await db
-    .select()
-    .from(s.iniciativaEtapa)
-    .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
-  const [ag] = etapaRow?.agenteId
-    ? await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId))
-    : [null];
-
+// Conclui a etapa ATUAL da iniciativa: gera o documento (ou as histórias na
+// etapa de Histórias), marca como concluída, avança e abre a próxima. Retorna
+// o documento, a próxima etapa e se a iniciativa terminou. Reutilizado pelo
+// endpoint manual e pelo orquestrador da execução autônoma.
+export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador"): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean }> {
+  const ordem = ini.etapaAtual;
+  const [etapaRow] = await db.select().from(s.iniciativaEtapa).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
+  if (!etapaRow) return { ok: false, erro: "etapa atual não encontrada", proxima: null, terminou: true };
+  const [ag] = etapaRow.agenteId ? await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId)) : [null];
   const totalEtapas = (await db.select().from(s.iniciativaEtapa)).filter((e: any) => e.iniciativaId === ini.id).length;
 
-  // Etapa de Histórias (reconhecida pelo NOME, para funcionar em qualquer método):
-  // geração ITERATIVA — épicos → histórias reais no backlog + o documento é o
-  // backlog. Demais etapas: documento formal via IA.
   const ehHistorias = /hist[óo]ria/i.test(etapaRow.nome);
   let doc: any;
   if (ehHistorias) {
     const historias = await gerarHistoriasIterativo(db, ini, etapaRow);
     const nEpicos = new Set(historias.map((h) => h.epico)).size;
-    const markdown = historias.length ? docDeHistorias(ini, historias) : "_Nenhuma história pôde ser gerada — trabalhe com o agente no chat e conclua novamente._";
+    const markdown = historias.length ? docDeHistorias(ini, historias) : "_Nenhuma história pôde ser gerada._";
     [doc] = await db.insert(s.documento).values({
       squadId: ini.squadId, iniciativaId: ini.id, titulo: `Histórias — ${ini.titulo}`, tipo: "doc", emoji: "📝",
       resumo: `${historias.length} história(s) em ${nEpicos} épico(s).`, conteudo: markdown,
-      autorNome: ag?.nome ?? "Agente da etapa", escopo: "squad",
+      autorNome: ag?.nome ?? autorNome, escopo: "squad",
     }).returning();
   } else {
-    // Toda etapa ENTREGA um documento formal, gerado pelo agente e armazenado em
-    // Documentação (visível na jornada e em /squad/docs).
     doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
   }
 
-  await db
-    .update(s.iniciativaEtapa)
-    .set({
-      status: "concluida",
-      concluidaEm: new Date(),
-      artefato: {
-        titulo: doc.titulo,
-        secoes: [
-          { h: "Documento gerado", itens: [`${doc.emoji ?? "📄"} ${doc.titulo} — por ${doc.autorNome}. Disponível em Documentação.`] },
-          ...(doc.resumo ? [{ h: "Resumo", itens: [doc.resumo] }] : []),
-        ],
-      },
-    })
-    .where(eq(s.iniciativaEtapa.id, etapaRow.id));
+  await db.update(s.iniciativaEtapa).set({
+    status: "concluida", concluidaEm: new Date(),
+    artefato: {
+      titulo: doc.titulo,
+      secoes: [
+        { h: "Documento gerado", itens: [`${doc.emoji ?? "📄"} ${doc.titulo} — por ${doc.autorNome}. Disponível em Documentação.`] },
+        ...(doc.resumo ? [{ h: "Resumo", itens: [doc.resumo] }] : []),
+      ],
+    },
+  }).where(eq(s.iniciativaEtapa.id, etapaRow.id));
 
   const proxima = ordem + 1;
   if (proxima > totalEtapas) {
     await db.update(s.iniciativa).set({ status: "concluida" }).where(eq(s.iniciativa.id, ini.id));
-  } else {
-    await db
-      .update(s.iniciativa)
-      .set({ etapaAtual: proxima })
-      .where(eq(s.iniciativa.id, ini.id));
-    await db
-      .update(s.iniciativaEtapa)
-      .set({ status: "em_andamento" })
-      .where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
-    // a próxima etapa já abre iniciada, com base nos documentos anteriores
-    await abrirProximaEtapa(db, ini, proxima);
+    return { ok: true, doc, etapaNome: etapaRow.nome, proxima: null, terminou: true };
   }
-  await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome, docId: doc.id });
-  return c.json({ ok: true, proximaEtapa: proxima <= totalEtapas ? proxima : null, docId: doc.id });
+  await db.update(s.iniciativa).set({ etapaAtual: proxima }).where(eq(s.iniciativa.id, ini.id));
+  await db.update(s.iniciativaEtapa).set({ status: "em_andamento" }).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
+  await abrirProximaEtapa(db, ini, proxima);
+  return { ok: true, doc, etapaNome: etapaRow.nome, proxima, terminou: false };
+}
+
+app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) => {
+  const me = c.get("me");
+  const ordem = Number(c.req.param("ordem"));
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
+  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
+  if (ordem !== ini.etapaAtual) return c.json({ error: "só a etapa atual pode ser concluída" }, 400);
+
+  const r = await concluirEtapaAtual(db, ini, me.nome);
+  if (!r.ok) return c.json({ error: r.erro }, 400);
+  await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: r.etapaNome, docId: r.doc.id });
+  return c.json({ ok: true, proximaEtapa: r.proxima, docId: r.doc.id });
 });
 
 /* Gera o SDD (spec testável) de UMA história — para desenvolver em outro agente. */
