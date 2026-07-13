@@ -17,6 +17,7 @@ interface Indicadores {
   masterCobertura: { total: number; revisados: number; pct: number | null; notaMedia: number | null };
   adocaoMetodo: { institucional: number; livre: number; total: number };
   tokensPorEtapa: { etapa: string; tokens: number }[];
+  retrabalho: { docsRevisados: number; docsComRetrabalho: number; pctDocs: number | null; acervoGerados: number; acervoDescartados: number; pctAcervo: number | null };
   filaAprovacoes: { pendentes: number; maisAntigaDias: number | null; idadeMediaDias: number | null; taxaRejeicao: number | null; decididos: number };
   coberturaGuardRails: { ativos: number; comGuardRails: number; pct: number | null };
   tokensPorIniciativa: { codigo: string; tokens: number }[];
@@ -135,12 +136,38 @@ export default function Indicadores() {
 
       <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
         <div className="card viz">
+          <h3>Retrabalho / qualidade da geração</h3>
+          <div className="sub">quanto a IA precisou refazer — proxy de alucinação (menor é melhor)</div>
+          {data && data.retrabalho.docsRevisados === 0 && data.retrabalho.acervoGerados === 0 ? (
+            <p className="sub" style={{ marginTop: 10 }}>Sem dados ainda — aparece com a execução autônoma e a geração de itens no Acervo.</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 22, marginTop: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.retrabalho.pctDocs != null ? `${data.retrabalho.pctDocs}%` : "—"}</div>
+                  <div className="sub">docs que o Master mandou revisar</div>
+                  <div className="sub" style={{ fontSize: 11 }}>{data ? `${data.retrabalho.docsComRetrabalho}/${data.retrabalho.docsRevisados} passos` : ""}</div>
+                </div>
+                <div>
+                  <div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.retrabalho.pctAcervo != null ? `${data.retrabalho.pctAcervo}%` : "—"}</div>
+                  <div className="sub">itens de IA descartados na revisão</div>
+                  <div className="sub" style={{ fontSize: 11 }}>{data ? `${data.retrabalho.acervoDescartados}/${data.retrabalho.acervoGerados} do Acervo` : ""}</div>
+                </div>
+              </div>
+              <div className="axis-note">docs: rodadas &gt; 1 no Agente Master · Acervo: descartes vs. gerados por IA</div>
+            </>
+          )}
+        </div>
+        <div className="card viz">
           <h3>Tokens por iniciativa — execução autônoma</h3>
           <div className="sub">consumo acumulado da orquestração, para prever custo antes de aprovar</div>
           {(data?.tokensPorIniciativa ?? []).length === 0 && <p className="sub">Sem runs de orquestração com consumo ainda.</p>}
           <HBar rows={(data?.tokensPorIniciativa ?? []).map((t) => ({ label: t.codigo, value: Math.round(t.tokens / 1000) }))} />
           <div className="axis-note">mil tokens por iniciativa (runs autônomos)</div>
         </div>
+      </div>
+
+      <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
         <div className="card viz">
           <h3>Progresso dos KRs</h3>
           <div className="sub">realizado mais recente vs. meta do trimestre</div>

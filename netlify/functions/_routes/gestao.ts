@@ -20,6 +20,7 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
   const tools = await db.select().from(s.tool);
   const mcps = await db.select().from(s.conexaoMcp);
   const agentes = await db.select().from(s.agente);
+  const auditoria = await db.select().from(s.auditLog);
 
   const etapaNomes = ["Brief", "PRD", "Arquitetura", "Histórias", "Desenvolvimento", "Esteira & GMUD"];
   const fluxo = etapaNomes.map((nome, idx) => ({
@@ -86,6 +87,22 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     revisados: comMaster.length,
     pct: passosConcluidos.length ? Math.round((comMaster.length / passosConcluidos.length) * 100) : null,
     notaMedia: notas.length ? Math.round((notas.reduce((a: number, b: number) => a + b, 0) / notas.length) * 10) / 10 : null,
+  };
+
+  // Taxa de retrabalho (proxy de alucinação/qualidade): documentos que o Master
+  // mandou revisar (mais de 1 rodada) + itens do Acervo gerados por IA que foram
+  // descartados na revisão humana. Quanto menor, mais confiável a geração.
+  const passosComMaster = execPassos.filter((p: any) => p.status === "concluido" && p.saida?.revisao);
+  const passosRetrabalho = passosComMaster.filter((p: any) => (p.saida.revisao.rodadas ?? 1) > 1);
+  const acervoGerados = auditoria.filter((a: any) => a.acao === "gerar_item_acervo").length;
+  const acervoDescartados = auditoria.filter((a: any) => a.acao === "descartar_item_acervo").length;
+  const retrabalho = {
+    docsRevisados: passosComMaster.length,
+    docsComRetrabalho: passosRetrabalho.length,
+    pctDocs: passosComMaster.length ? Math.round((passosRetrabalho.length / passosComMaster.length) * 100) : null,
+    acervoGerados,
+    acervoDescartados,
+    pctAcervo: acervoGerados ? Math.round((acervoDescartados / acervoGerados) * 100) : null,
   };
 
   // Adoção do método institucional vs. modelo livre (a partir da criação).
@@ -169,6 +186,7 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     masterCobertura,
     adocaoMetodo,
     tokensPorEtapa,
+    retrabalho,
     filaAprovacoes,
     coberturaGuardRails,
     tokensPorIniciativa,
