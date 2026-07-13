@@ -308,11 +308,13 @@ export const documento = aiWorkspace.table("documento", {
   id: uuid("id").primaryKey().defaultRandom(),
   squadId: uuid("squad_id").references(() => squad.id),
   iniciativaId: uuid("iniciativa_id").references(() => iniciativa.id),
+  historiaId: uuid("historia_id"), // SDD ligado a uma história
   titulo: text("titulo").notNull(),
-  tipo: text("tipo").notNull().default("doc"), // prd|adr|api|guia|postmortem|doc
+  tipo: text("tipo").notNull().default("doc"), // prd|adr|api|guia|postmortem|sdd|doc
   emoji: text("emoji"),
   resumo: text("resumo"),
   conteudo: text("conteudo").notNull(), // markdown
+  extra: jsonb("extra").$type<{ promptPronto?: string; arquivo?: string } | null>(), // SDD: prompt pronto + nome do arquivo
   autorNome: text("autor_nome").notNull(),
   escopo: text("escopo").notNull().default("squad"), // squad|release_train|comunidade
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),

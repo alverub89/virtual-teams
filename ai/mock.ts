@@ -105,6 +105,25 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
+// SDD testável de uma história.
+function talvezSdd(req: ChatRequest): string | null {
+  if (!/Gere um SDD|Spec-Driven Development/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const h = ultima.match(/Hist[óo]ria\s+(\S+):\s*(.+)/i);
+  const cod = h?.[1] ?? "H01"; const tit = h?.[2]?.trim() ?? "história";
+  const markdown =
+    `# SDD — ${cod} ${tit}\n\n## Contexto\nHistória derivada da iniciativa.\n\n` +
+    `## Escopo\n- Entra: o fluxo descrito na história\n- Não entra: itens de outras histórias\n\n` +
+    `## Especificação técnica\n- Endpoint/serviço responsável pela ação\n- Validação de entradas\n- Persistência do resultado\n\n` +
+    `## Plano de testes\n- Teste do caminho feliz (critério de aceite principal)\n- Teste de validação de entrada\n- Teste de erro/edge case\n\n` +
+    `## Tarefas\n1. Implementar o handler\n2. Adicionar validação\n3. Escrever os testes\n\n## Definition of Done\n- Testes passando e critérios de aceite satisfeitos`;
+  const promptPronto =
+    `Você é um engenheiro. Implemente a história ${cod} — ${tit}.\n` +
+    `Contexto: parte de uma iniciativa maior.\nTarefa: implementar o fluxo com validação e persistência.\n` +
+    `Testes de aceite a satisfazer:\n- Caminho feliz funciona\n- Entradas inválidas são rejeitadas\nRestrições: siga os padrões do repositório.\nEntregue: código + testes.`;
+  return JSON.stringify({ resumo: `SDD testável da história ${cod}.`, markdown, promptPronto });
+}
+
 // Épicos de uma iniciativa (etapa de Histórias).
 function talvezEpicos(req: ChatRequest): string | null {
   if (!/identifique os [ÉE]PICOS/i.test(req.system)) return null;
@@ -190,6 +209,8 @@ function talvezKbRepo(req: ChatRequest): string | null {
 }
 
 function responder(req: ChatRequest): string {
+  const sdd = talvezSdd(req);
+  if (sdd) return sdd;
   const epicos = talvezEpicos(req);
   if (epicos) return epicos;
   const hist = talvezHistorias(req);

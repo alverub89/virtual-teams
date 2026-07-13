@@ -21,7 +21,7 @@ interface Jornada {
   etapaAtual: number;
   capacidade: { nome: string } | null;
   etapas: Etapa[];
-  historias: { id: string; codigo: string; titulo: string; descricao: string | null; pontos: number | null; status: string; epico: string | null; criteriosAceite: string[]; origem?: string }[];
+  historias: { id: string; codigo: string; titulo: string; descricao: string | null; pontos: number | null; status: string; epico: string | null; criteriosAceite: string[]; origem?: string; sdd?: { docId: string; promptPronto: string } | null }[];
   docs: { id: string; titulo: string; emoji: string | null }[];
 }
 interface Msg {
@@ -55,6 +55,16 @@ export default function JornadaPage() {
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
+
+  const [gerandoSdd, setGerandoSdd] = useState<string | null>(null);
+  const gerarSdd = useMutation({
+    mutationFn: (hid: string) => post<{ docId: string }>(`/iniciativas/${codigo}/historias/${hid}/sdd`),
+    onMutate: (hid) => setGerandoSdd(hid),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["iniciativa", codigo] }); toast("🧩 SDD gerado — pronto para desenvolver em outro agente"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+    onSettled: () => setGerandoSdd(null),
+  });
+  const copiarPrompt = async (txt: string) => { try { await navigator.clipboard.writeText(txt); toast("📋 Prompt copiado — cole no seu agente de código"); } catch { toast("⚠️ Não foi possível copiar"); } };
 
   if (!ini) return <p className="muted">Carregando jornada…</p>;
 
@@ -146,6 +156,19 @@ export default function JornadaPage() {
                           <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12 }}>
                             {h.criteriosAceite.map((c, i) => <li key={i} className="sub">{c}</li>)}
                           </ul>
+                        )}
+                        {(me?.papel === "pm" || me?.papel === "tech_lead" || me?.papel === "dev") && (
+                          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                            {h.sdd ? (
+                              <>
+                                <Link to={`/squad/docs/${h.sdd.docId}`} className="btn" style={{ fontSize: 12 }}>🧩 Ver SDD</Link>
+                                <button className="btn" style={{ fontSize: 12 }} onClick={() => copiarPrompt(h.sdd!.promptPronto)}>📋 Copiar prompt</button>
+                                <button className="btn" style={{ fontSize: 12 }} onClick={() => gerarSdd.mutate(h.id)} disabled={gerandoSdd === h.id}>{gerandoSdd === h.id ? "…" : "↻ Regerar"}</button>
+                              </>
+                            ) : (
+                              <button className="btn primary" style={{ fontSize: 12 }} onClick={() => gerarSdd.mutate(h.id)} disabled={gerandoSdd === h.id}>{gerandoSdd === h.id ? "Gerando SDD…" : "🧩 Gerar SDD"}</button>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}

@@ -93,10 +93,12 @@ app.get("/:codigo", async (c) => {
     .where(eq(s.iniciativaEtapa.iniciativaId, ini.id))
     .orderBy(asc(s.iniciativaEtapa.ordem));
   const agentes = await db.select().from(s.agente);
-  const historias = await db
+  const historias = (await db
     .select()
     .from(s.historia)
-    .where(eq(s.historia.iniciativaId, ini.id));
+    .where(eq(s.historia.iniciativaId, ini.id)))
+    .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  const sdds = (await db.select().from(s.documento)).filter((d: any) => d.iniciativaId === ini.id && d.tipo === "sdd");
   const docs = await db
     .select({ id: s.documento.id, titulo: s.documento.titulo, tipo: s.documento.tipo, emoji: s.documento.emoji })
     .from(s.documento)
@@ -108,7 +110,10 @@ app.get("/:codigo", async (c) => {
   return c.json({
     ...ini,
     capacidade,
-    historias,
+    historias: historias.map((h: any) => {
+      const sdd = sdds.find((d: any) => d.historiaId === h.id);
+      return { ...h, sdd: sdd ? { docId: sdd.id, promptPronto: sdd.extra?.promptPronto ?? "" } : null };
+    }),
     docs,
     etapas: etapas.map((e: any) => ({
       ...e,
@@ -549,6 +554,56 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
   }
   await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome, docId: doc.id });
   return c.json({ ok: true, proximaEtapa: proxima <= 6 ? proxima : null, docId: doc.id });
+});
+
+/* Gera o SDD (spec testável) de UMA história — para desenvolver em outro agente. */
+app.post("/:codigo/historias/:id/sdd", rbac("criar_iniciativa"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
+  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
+  const [h] = await db.select().from(s.historia).where(eq(s.historia.id, c.req.param("id")));
+  if (!h || h.iniciativaId !== ini.id) return c.json({ error: "história não encontrada" }, 404);
+
+  const contexto = await contextoEtapasAnteriores(db, ini);
+  const criterios = (h.criteriosAceite ?? []).map((x: string) => `- ${x}`).join("\n") || "- (sem critérios registrados)";
+  let sdd: any = null;
+  try {
+    sdd = await gerarJson({
+      tarefa: "arquitetura",
+      system:
+        "Você é um engenheiro de software. Gere um SDD (Spec-Driven Development) TESTÁVEL para UMA história de usuário, " +
+        "para ser EXECUTADO por um agente de código externo (Cursor, Claude Code). Seja concreto e verificável. Responda SOMENTE JSON.",
+      instrucao:
+        `Contexto da iniciativa ${ini.codigo} — ${ini.titulo}:\n${contexto || "(sem documentos anteriores)"}\n\n` +
+        `História ${h.codigo}: ${h.titulo}\n${h.descricao ?? ""}\nCritérios de aceite:\n${criterios}\n\n` +
+        'Formato JSON: { "resumo": "1 frase", ' +
+        '"markdown": "# SDD — <história>\\n## Contexto\\n## Escopo (o que entra/não entra)\\n## Especificação técnica (componentes, arquivos/áreas a mexer, contratos/APIs, dados)\\n## Plano de testes (casos derivados dos critérios de aceite, verificáveis)\\n## Tarefas (passo a passo)\\n## Definition of Done", ' +
+        '"promptPronto": "Um prompt autocontido, em 1ª pessoa para o agente de código: papel, resumo do contexto, tarefa objetiva, testes de aceite a satisfazer, restrições e o que entregar (arquivos, testes)." }',
+      maxTokens: 2600,
+    });
+  } catch { sdd = null; }
+
+  const resumo = (sdd?.resumo && String(sdd.resumo).trim()) || `SDD da história ${h.codigo}.`;
+  const promptPronto = (sdd?.promptPronto && String(sdd.promptPronto).trim())
+    || `Implemente a história ${h.codigo} — ${h.titulo}.\n\n${h.descricao ?? ""}\n\nCritérios de aceite:\n${criterios}\n\nEntregue o código e os testes que satisfaçam os critérios acima.`;
+  let markdown = (sdd?.markdown && String(sdd.markdown).trim())
+    || `# SDD — ${h.codigo} ${h.titulo}\n\n## Contexto\n${h.descricao ?? ""}\n\n## Critérios de aceite\n${criterios}`;
+  markdown += `\n\n## 🤖 Prompt para o agente de código\n\n\`\`\`\n${promptPronto}\n\`\`\`\n`;
+
+  // Substitui o SDD anterior desta história, se houver (regenerar).
+  const antigos = (await db.select().from(s.documento)).filter((d: any) => d.tipo === "sdd" && d.historiaId === h.id);
+  for (const d of antigos) await db.delete(s.documento).where(eq(s.documento.id, d.id));
+
+  const [docSdd] = await db.insert(s.documento).values({
+    squadId: ini.squadId, iniciativaId: ini.id, historiaId: h.id,
+    titulo: `SDD — ${h.codigo} ${h.titulo}`, tipo: "sdd", emoji: "🧩", resumo,
+    conteudo: markdown, extra: { promptPronto, arquivo: `${h.codigo}.spec.md` },
+    autorNome: me.nome, escopo: "squad",
+  }).returning();
+  await audit(me, "gerar_sdd", `historia:${h.codigo}`, { docId: docSdd.id });
+  return c.json({ ok: true, docId: docSdd.id, promptPronto });
 });
 
 export default app;

@@ -82,11 +82,21 @@ export default function Docs() {
 
 export function DocReader({ base }: { base: string }) {
   const { id } = useParams();
-  const { data: doc } = useQuery<DocMeta & { conteudo: string }>({
+  const { data: doc } = useQuery<DocMeta & { conteudo: string; extra?: { promptPronto?: string; arquivo?: string } | null }>({
     queryKey: ["doc", id],
     queryFn: () => api(`/docs/${id}`),
   });
   if (!doc) return <p className="muted">Carregando…</p>;
+  const isSdd = doc.tipo === "sdd";
+  const copiar = async (txt: string) => { try { await navigator.clipboard.writeText(txt); } catch { /* */ } };
+  const baixarSpec = () => {
+    const blob = new Blob([doc.conteudo], { type: "text/markdown" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = doc.extra?.arquivo ?? "spec.md";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
   return (
     <>
       <div className="crumbs">
@@ -101,10 +111,17 @@ export function DocReader({ base }: { base: string }) {
               {doc.autorNome} · {new Date(doc.criadoEm).toLocaleDateString("pt-BR")}
             </div>
           </div>
-          <span style={{ marginLeft: "auto" }}>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+            {isSdd && doc.extra?.promptPronto && <button className="btn" onClick={() => copiar(doc.extra!.promptPronto!)}>📋 Copiar prompt</button>}
+            {isSdd && <button className="btn" onClick={baixarSpec}>⬇️ Baixar {doc.extra?.arquivo ?? "spec.md"}</button>}
             <EscopoChip escopo={doc.escopo} />
           </span>
         </div>
+        {isSdd && (
+          <div className="card" style={{ marginBottom: 12, fontSize: 13 }}>
+            🧩 <b>SDD para desenvolver em outro agente.</b> <span className="sub">Copie o prompt e cole no seu agente de código (Cursor, Claude Code…), ou baixe o {doc.extra?.arquivo ?? "spec.md"} para commitar no repositório.</span>
+          </div>
+        )}
         <Markdown conteudo={doc.conteudo} />
       </div>
     </>
