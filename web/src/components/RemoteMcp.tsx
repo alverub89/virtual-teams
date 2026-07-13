@@ -9,7 +9,7 @@ interface RemoteTool {
   inputSchema?: { properties?: Record<string, { description?: string; type?: string }>; required?: string[] };
 }
 
-function RemoteToolCall({ alvo, tool, exemplo }: { alvo: { url?: string; mcpId?: string }; tool: RemoteTool; exemplo?: Record<string, unknown> }) {
+function RemoteToolCall({ alvo, tool, exemplo, apiBase }: { alvo: { url?: string; mcpId?: string }; tool: RemoteTool; exemplo?: Record<string, unknown>; apiBase: string }) {
   const props = tool.inputSchema?.properties ?? {};
   const campos = Object.keys(props);
   const [args, setArgs] = useState<Record<string, string>>(() =>
@@ -23,7 +23,7 @@ function RemoteToolCall({ alvo, tool, exemplo }: { alvo: { url?: string; mcpId?:
       const t0 = performance.now();
       const parsed: Record<string, unknown> = {};
       for (const k of campos) if (args[k] !== "") parsed[k] = args[k];
-      const r = await post<{ ok: boolean; resultado?: unknown; erro?: string; isError?: boolean }>("/console/mcp-client/call", { ...alvo, name: tool.name, arguments: parsed });
+      const r = await post<{ ok: boolean; resultado?: unknown; erro?: string; isError?: boolean }>(`${apiBase}/mcp-client/call`, { ...alvo, name: tool.name, arguments: parsed });
       setMs(Math.round(performance.now() - t0));
       return r;
     },
@@ -54,12 +54,12 @@ function RemoteToolCall({ alvo, tool, exemplo }: { alvo: { url?: string; mcpId?:
 
 // Conecta (como cliente MCP) a um servidor remoto pela URL, lista as tools reais
 // e permite chamá-las — tudo via backend (evita CORS e trata SSE).
-export function RemoteMcpTester({ url, mcpId, exemplos }: { url?: string; mcpId?: string; exemplos?: Record<string, Record<string, unknown>> }) {
+export function RemoteMcpTester({ url, mcpId, exemplos, apiBase = "/console" }: { url?: string; mcpId?: string; exemplos?: Record<string, Record<string, unknown>>; apiBase?: string }) {
   const [dados, setDados] = useState<{ serverInfo?: any; tools?: RemoteTool[]; erro?: string } | null>(null);
   const alvo = mcpId ? { mcpId } : { url };
 
   const conectar = useMutation({
-    mutationFn: () => post<{ ok: boolean; serverInfo?: any; tools?: RemoteTool[]; erro?: string }>("/console/mcp-client/tools", alvo),
+    mutationFn: () => post<{ ok: boolean; serverInfo?: any; tools?: RemoteTool[]; erro?: string }>(`${apiBase}/mcp-client/tools`, alvo),
     onSuccess: (r) => setDados(r.ok ? { serverInfo: r.serverInfo, tools: r.tools } : { erro: r.erro }),
     onError: (e) => setDados({ erro: (e as Error).message }),
   });
@@ -79,7 +79,7 @@ export function RemoteMcpTester({ url, mcpId, exemplos }: { url?: string; mcpId?
             <Chip tone="neutral">{dados.tools.length} tools</Chip>
           </div>
           {dados.tools.length === 0 && <p className="empty-note">Conectou, mas o servidor não expôs tools.</p>}
-          {dados.tools.map((t) => <RemoteToolCall key={t.name} alvo={alvo} tool={t} exemplo={exemplos?.[t.name]} />)}
+          {dados.tools.map((t) => <RemoteToolCall key={t.name} alvo={alvo} tool={t} exemplo={exemplos?.[t.name]} apiBase={apiBase} />)}
         </>
       )}
     </Card>

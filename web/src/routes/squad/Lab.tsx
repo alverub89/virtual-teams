@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, del, post } from "../../lib/api";
 import { Button, Card, Chip, Fld, Modal, PageHead } from "../../components/ui";
+import { RemoteMcpTester } from "../../components/RemoteMcp";
 import { useToast } from "../../lib/toast";
 
 interface Tool { id: string; nome: string; descricao: string | null; permissao: string; execucao: string; aprovacao: string; motivoRejeicao: string | null }
-interface Mcp { id: string; nome: string; sistema: string; descricao: string | null; url: string | null; aprovacao: string; motivoRejeicao: string | null; endpoint: string | null }
-interface Dados { podeCriar: boolean; tools: Tool[]; mcps: Mcp[] }
+interface Mcp { id: string; nome: string; sistema: string; descricao: string | null; url: string | null; aprovacao: string; motivoRejeicao: string | null; endpoint: string | null; escopo?: string }
+interface Dados { podeCriar: boolean; tools: Tool[]; mcps: Mcp[]; disponiveis: Mcp[] }
 
 const STATUS: Record<string, { label: string; tone: "neutral" | "warn" | "good" | "crit" }> = {
   rascunho: { label: "Rascunho", tone: "neutral" },
@@ -102,6 +103,22 @@ export default function Lab() {
               </div>
             )}
           </Card>
+        ))}
+      </div>
+
+      <div className="sec-title" style={{ marginTop: 18 }}>Disponíveis para a squad</div>
+      <div className="banner" style={{ marginBottom: 10 }}>
+        🔌 <span>MCPs aprovados que a squad pode usar (globais do CTO + os da própria squad). Clique em <b>Conectar</b> para listar e acionar as tools.</span>
+      </div>
+      {data.disponiveis.length === 0 && <p className="empty-note">Nenhum MCP aprovado disponível ainda. Crie um acima e publique — o CTO aprova e ele aparece aqui.</p>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {data.disponiveis.map((m) => (
+          <div key={m.id}>
+            <div style={{ fontWeight: 600, margin: "2px 4px 6px" }}>{m.nome} <span className="muted" style={{ fontWeight: 400 }}>· {m.sistema} · {m.escopo === "global" ? "global" : "squad"}</span></div>
+            {m.url
+              ? <RemoteMcpTester mcpId={m.id} apiBase="/lab" />
+              : <Card pad><p className="sub">{m.descricao || m.sistema}</p>{m.endpoint && <div className="prompt-box" style={{ marginTop: 6, fontSize: 11 }}>{m.endpoint}</div>}</Card>}
+          </div>
         ))}
       </div>
 
