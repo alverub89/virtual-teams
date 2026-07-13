@@ -50,6 +50,13 @@
       "when": 1784010000000,
       "tag": "0006_mcp_token",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784020000000,
+      "tag": "0007_mapa_capacidades",
+      "breakpoints": true
     }
   ]
 }

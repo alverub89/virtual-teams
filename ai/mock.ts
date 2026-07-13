@@ -83,7 +83,31 @@ function talvezAgenteExecutor(req: ChatRequest): string | null {
   return JSON.stringify({ acao: t0 ? "chamar" : "final", tool: t0?.nome, args, resposta: t0 ? undefined : "Nenhuma tool disponível." });
 }
 
+// Mapa de capacidades: gera uma arquitetura de negócio plausível a partir dos
+// nomes dos repositórios citados na instrução, para a demo rodar sem gateway.
+function talvezCapacidades(req: ChatRequest): string | null {
+  if (!/arquiteto de neg[oó]cios|fluxos de valor|ARQUITETURA DE NEG/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const repos = [...new Set([...ultima.matchAll(/Reposit[oó]rio\s+(\S+)/g)].map((m) => m[1]))].slice(0, 8);
+  const ehImpacto = /REAVALIA[ÇC]/i.test(ultima);
+  const fluxo = "Aceitar e liquidar pagamentos";
+  const caps: any[] = [
+    { nome: "Gestão de Cobrança", nivel: 1, pai: null, fluxoValor: fluxo, descricao: "Emissão, agendamento e conciliação de cobranças.", repos: repos.slice(0, 2) },
+    { nome: "Autorização de Recorrência", nivel: 2, pai: "Gestão de Cobrança", descricao: "Consentimento e mandato do pagador.", repos: repos.slice(0, 1) },
+    { nome: "Liquidação e Split", nivel: 1, pai: null, fluxoValor: fluxo, descricao: "Divisão e liquidação de valores entre participantes.", repos: repos.slice(1, 3) },
+    { nome: "Trilha de Auditoria", nivel: 2, pai: "Liquidação e Split", descricao: "Registro imutável de operações.", repos: repos.slice(2, 3) },
+  ];
+  return JSON.stringify({
+    resumo: `Arquitetura de negócio inferida de ${repos.length} repositório(s): fluxo de valor "${fluxo}" sustentado por capacidades de cobrança, liquidação e auditoria.`,
+    fluxosValor: [{ nome: fluxo, descricao: "Da autorização do pagador à liquidação e conciliação." }],
+    capacidades: caps,
+    ...(ehImpacto ? { impacto: { resumo: "O novo repositório reforça a capacidade de Liquidação e Split.", mudancas: ["Nova capacidade L2 candidata: Roteamento de Liquidação", "Cobertura de código aumentou em Liquidação e Split"] } } : {}),
+  });
+}
+
 function responder(req: ChatRequest): string {
+  const cap = talvezCapacidades(req);
+  if (cap) return cap;
   const exec = talvezAgenteExecutor(req);
   if (exec) return exec;
   const mcp = talvezMcpJson(req);

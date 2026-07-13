@@ -21,7 +21,26 @@ export const comunidade = aiWorkspace.table("comunidade", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
   donoId: uuid("dono_id"), // CTO dono deste tenant (app-enforced, sem FK circular)
+  githubToken: text("github_token"), // PAT p/ ler repositórios (mapa de capacidades) — Bearer
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Mapa de capacidades da squad — arquitetura de negócio (fluxo de valor →
+// capacidades L1/L2 → repositórios) gerada por IA lendo os repos. Cada linha é
+// uma VERSÃO (foto no tempo): mostra o sistema evoluindo.
+export const mapaCapacidade = aiWorkspace.table("mapa_capacidade", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  squadId: uuid("squad_id").notNull(),
+  versao: integer("versao").notNull().default(1),
+  status: text("status").notNull().default("analisando"), // analisando|pronto|erro
+  progresso: text("progresso"), // texto do passo atual (para o aviso "analisando…")
+  motivo: text("motivo"), // inicial | regeneracao | impacto:<repo>
+  conteudo: jsonb("conteudo").$type<Record<string, unknown> | null>(), // { fluxosValor, capacidades, resumo }
+  reposAnalisados: jsonb("repos_analisados").$type<string[]>().notNull().default([]),
+  impacto: jsonb("impacto").$type<Record<string, unknown> | null>(), // avaliação de impacto (reavaliação)
+  criadoPor: uuid("criado_por"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  concluidoEm: timestamp("concluido_em", { withTimezone: true }),
 });
 
 export const releaseTrain = aiWorkspace.table("release_train", {
