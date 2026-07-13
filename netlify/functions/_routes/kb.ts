@@ -96,6 +96,30 @@ app.get("/:id", async (c) => {
   return c.json({ ...artigo, endossos: endossos.map((e: any) => e.nivel) });
 });
 
+/* Editar um artigo (inclusive os gerados por IA). Registra quem editou. */
+app.put("/:id", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [art] = await db.select().from(s.kbArtigo).where(eq(s.kbArtigo.id, c.req.param("id")));
+  if (!art || art.squadId !== me.squadId) return c.json({ error: "artigo não encontrado" }, 404);
+  const pode = me.papel === "pm" || me.papel === "tech_lead" || me.papel === "cto" || art.autorId === me.id;
+  if (!pode) return c.json({ error: "sem permissão" }, 403);
+  if (art.status === "gerando") return c.json({ error: "aguarde a geração terminar" }, 409);
+  const body = z.object({
+    titulo: z.string().min(4).optional(),
+    resumo: z.string().nullable().optional(),
+    conteudo: z.string().min(1).optional(),
+  }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  await db.update(s.kbArtigo).set({
+    ...body.data,
+    status: "pronto",
+    editadoPor: me.id, editadoNome: me.nome, editadoEm: new Date(),
+  }).where(eq(s.kbArtigo.id, art.id));
+  await audit(me, "editar_kb", `kb:${art.id}`);
+  return c.json({ ok: true });
+});
+
 const CriarArtigo = z.object({
   titulo: z.string().min(4),
   resumo: z.string().optional(),

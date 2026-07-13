@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, post, useMe } from "../../lib/api";
+import { api, post, put, useMe } from "../../lib/api";
 import { Button, Chip, EscopoChip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { Markdown } from "./Docs";
@@ -19,6 +19,9 @@ interface Artigo {
   repo?: string | null;
   progresso?: string | null;
   tipoDoc?: string | null;
+  autorId?: string | null;
+  editadoNome?: string | null;
+  editadoEm?: string | null;
 }
 interface TipoDoc { key: string; label: string; emoji: string; padrao: boolean }
 interface ReposDisp { repos: { id: string; nome: string; linguagem: string | null }[]; temToken: boolean; tiposDoc: TipoDoc[] }
@@ -241,7 +244,28 @@ export function KbArtigo() {
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
+  const [editando, setEditando] = useState(false);
+  const [eTitulo, setETitulo] = useState("");
+  const [eResumo, setEResumo] = useState("");
+  const [eConteudo, setEConteudo] = useState("");
+  const abrirEdicao = () => {
+    if (!artigo) return;
+    setETitulo(artigo.titulo); setEResumo(artigo.resumo ?? ""); setEConteudo(artigo.conteudo);
+    setEditando(true);
+  };
+  const salvar = useMutation({
+    mutationFn: () => put(`/kb/${id}`, { titulo: eTitulo, resumo: eResumo || null, conteudo: eConteudo }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kb-artigo", id] });
+      qc.invalidateQueries({ queryKey: ["kb"] });
+      setEditando(false);
+      toast("💾 Documento atualizado");
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+
   if (!artigo) return <p className="muted">Carregando…</p>;
+  const podeEditar = artigo.status !== "gerando" && (me?.papel === "pm" || me?.papel === "tech_lead" || me?.papel === "cto" || me?.id === artigo.autorId);
   return (
     <>
       <div className="crumbs">
@@ -252,13 +276,18 @@ export function KbArtigo() {
           <span className="dm-ic">📚</span>
           <div>
             <h1>{artigo.titulo}</h1>
-            <div className="dm-sub">{artigo.autorNome} · {new Date(artigo.criadoEm).toLocaleDateString("pt-BR")}</div>
+            <div className="dm-sub">
+              {artigo.autorNome} · {new Date(artigo.criadoEm).toLocaleDateString("pt-BR")}
+              {artigo.editadoNome && <> · ✍️ editado por {artigo.editadoNome}{artigo.editadoEm ? ` em ${new Date(artigo.editadoEm).toLocaleDateString("pt-BR")}` : ""}</>}
+            </div>
           </div>
-          <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {artigo.origem === "ia" && <Chip tone="blue">🤖 Gerado por IA{artigo.editadoNome ? " · revisado" : ""}</Chip>}
             <EscopoChip escopo={artigo.escopo} />
             {artigo.endossos.map((n) => (
               <Chip key={n} tone="good">✓ {n === "comunidade" ? "comunidade" : "RT"}</Chip>
             ))}
+            {podeEditar && <Button onClick={abrirEdicao}>✏️ Editar</Button>}
             {me?.papel === "cto" && artigo.endossos.length < 2 && (
               <Button onClick={() => endossar.mutate(artigo.endossos.includes("release_train") ? "comunidade" : "release_train")}>
                 Endossar
@@ -266,6 +295,11 @@ export function KbArtigo() {
             )}
           </span>
         </div>
+        {artigo.origem === "ia" && artigo.status === "pronto" && (
+          <div className="card" style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            🤖 <span className="sub">Este documento foi gerado por IA a partir do repositório{artigo.repo ? ` ${artigo.repo}` : ""}. Revise e edite antes de tratar como fonte definitiva.</span>
+          </div>
+        )}
         {artigo.status === "gerando" ? (
           <div className="card" style={{ textAlign: "center", padding: 28 }}>
             <div style={{ fontSize: 30 }}>⏳</div>
@@ -280,6 +314,28 @@ export function KbArtigo() {
           </>
         )}
       </div>
+
+      {editando && (
+        <Modal
+          title="Editar documento"
+          subtitle="Edite o conteúdo em Markdown. A alteração fica registrada como revisão sua."
+          onClose={() => setEditando(false)}
+          foot={
+            <>
+              <Button onClick={() => setEditando(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={() => eTitulo.length >= 4 && eConteudo.length >= 1 && salvar.mutate()}>
+                {salvar.isPending ? "Salvando…" : "💾 Salvar"}
+              </Button>
+            </>
+          }
+        >
+          <Fld label="Título"><input className="in" value={eTitulo} onChange={(e) => setETitulo(e.target.value)} /></Fld>
+          <Fld label="Resumo"><input className="in" value={eResumo} onChange={(e) => setEResumo(e.target.value)} /></Fld>
+          <Fld label="Conteúdo (markdown)">
+            <textarea className="in" rows={16} value={eConteudo} onChange={(e) => setEConteudo(e.target.value)} style={{ fontFamily: "ui-monospace, monospace", fontSize: 13 }} />
+          </Fld>
+        </Modal>
+      )}
     </>
   );
 }
