@@ -123,7 +123,7 @@ app.get("/agentes/:id", async (c) => {
     personalidade: a.personalidade,
     skills: minhasSkills.map((sk: any) => ({ nome: sk.nome, instrucoes: sk.instrucoes })),
     tools: minhasTools.map((t: any) => ({ nome: t.nome, descricao: t.descricao ?? "", permissao: t.permissao })),
-    guardRails: [],
+    guardRails: a.guardRails ?? [],
   });
 
   return c.json({
@@ -140,9 +140,13 @@ app.get("/agentes/:id", async (c) => {
 });
 
 const AtualizarAgente = z.object({
+  nome: z.string().min(2).optional(),
+  papel: z.string().min(2).optional(),
+  emoji: z.string().optional(),
   personalidade: z.string().min(10).optional(),
   nivelModelo: z.enum(["avancado", "intermediario", "leve"]).optional(),
   maxTokens: z.number().int().min(256).max(64000).optional(),
+  guardRails: z.array(z.string()).optional(),
   ativo: z.boolean().optional(),
   skillIds: z.array(z.string().uuid()).optional(),
   toolIds: z.array(z.string().uuid()).optional(),
@@ -451,7 +455,14 @@ app.get("/metodo-templates", (c) =>
   ])
 );
 
-const EtapaIn = z.object({ nome: z.string().min(1), agenteId: z.string().uuid().optional().nullable(), gera: z.string().optional(), checkpoint: z.boolean().optional() });
+const EtapaIn = z.object({
+  nome: z.string().min(1),
+  agenteId: z.string().uuid().optional().nullable(),
+  gera: z.string().optional(),
+  checkpoint: z.boolean().optional(),
+  instrucao: z.string().optional().nullable(),
+  config: z.object({ iteracoes: z.number().int().min(1).max(10).optional(), minSaidas: z.number().int().min(1).max(20).optional(), maxSaidas: z.number().int().min(1).max(30).optional() }).optional().nullable(),
+});
 const MetodoIn = z.object({
   nome: z.string().min(2),
   descricao: z.string().optional(),
@@ -470,6 +481,8 @@ async function gravarEtapas(db: any, metodoId: string, etapas: z.infer<typeof Et
       agenteId: e.agenteId ?? null,
       tipo: e.checkpoint ? "checkpoint" : "automatica",
       descricao: e.gera ?? null,
+      instrucao: e.instrucao ?? null,
+      config: e.config ?? null,
     }))
   );
 }

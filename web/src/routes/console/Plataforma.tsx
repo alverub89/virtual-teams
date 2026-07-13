@@ -66,12 +66,12 @@ export function Blueprints() {
 
 /* ==================== Métodos ==================== */
 
-interface Etapa { id?: string; nome: string; agenteNome?: string | null; agenteId?: string | null; descricao?: string | null; tipo?: string }
+interface Etapa { id?: string; nome: string; agenteNome?: string | null; agenteId?: string | null; descricao?: string | null; tipo?: string; instrucao?: string | null; config?: { minSaidas?: number; maxSaidas?: number; iteracoes?: number } | null }
 interface Metodo { id: string; nome: string; descricao: string | null; escopo: string; ativo: boolean; etapas: Etapa[] }
 interface AgenteMin { id: string; nome: string; emoji: string | null }
 interface Template { nome: string; fases: { nome: string; gera?: string; checkpoint?: boolean }[] }
 
-type FaseForm = { nome: string; agenteId: string; gera: string; checkpoint: boolean };
+type FaseForm = { nome: string; agenteId: string; gera: string; checkpoint: boolean; instrucao: string; minSaidas: string; maxSaidas: string };
 
 export function Metodos() {
   const toast = useToast();
@@ -86,20 +86,25 @@ export function Metodos() {
   const [fases, setFases] = useState<FaseForm[]>([]);
 
   const ag0 = () => agentes?.[0]?.id ?? "";
-  const abrirNovo = () => { setEdit("novo"); setNome(""); setEscopo("publico"); setFases([{ nome: "", agenteId: ag0(), gera: "", checkpoint: false }]); };
+  const faseVazia = (): FaseForm => ({ nome: "", agenteId: ag0(), gera: "", checkpoint: false, instrucao: "", minSaidas: "", maxSaidas: "" });
+  const abrirNovo = () => { setEdit("novo"); setNome(""); setEscopo("publico"); setFases([faseVazia()]); };
   const abrirEdit = (m: Metodo) => {
     setEdit(m); setNome(m.nome); setEscopo(m.escopo);
-    setFases(m.etapas.map((e) => ({ nome: e.nome, agenteId: e.agenteId ?? ag0(), gera: e.descricao ?? "", checkpoint: e.tipo === "checkpoint" })));
+    setFases(m.etapas.map((e) => ({ nome: e.nome, agenteId: e.agenteId ?? ag0(), gera: e.descricao ?? "", checkpoint: e.tipo === "checkpoint", instrucao: e.instrucao ?? "", minSaidas: e.config?.minSaidas ? String(e.config.minSaidas) : "", maxSaidas: e.config?.maxSaidas ? String(e.config.maxSaidas) : "" })));
   };
   const usarTemplate = (t: Template) => {
     if (!nome) setNome(t.nome);
-    setFases(t.fases.map((f) => ({ nome: f.nome, agenteId: ag0(), gera: f.gera ?? "", checkpoint: !!f.checkpoint })));
+    setFases(t.fases.map((f) => ({ ...faseVazia(), nome: f.nome, gera: f.gera ?? "", checkpoint: !!f.checkpoint })));
   };
   const setFase = (i: number, p: Partial<FaseForm>) => setFases((a) => a.map((f, j) => (j === i ? { ...f, ...p } : f)));
 
   const salvar = useMutation({
     mutationFn: () => {
-      const body = { nome, escopo, etapas: fases.filter((f) => f.nome.trim()).map((f) => ({ nome: f.nome, agenteId: f.agenteId || undefined, gera: f.gera, checkpoint: f.checkpoint })) };
+      const body = { nome, escopo, etapas: fases.filter((f) => f.nome.trim()).map((f) => {
+        const min = parseInt(f.minSaidas, 10); const max = parseInt(f.maxSaidas, 10);
+        const config = (!isNaN(min) || !isNaN(max)) ? { ...(isNaN(min) ? {} : { minSaidas: min }), ...(isNaN(max) ? {} : { maxSaidas: max }) } : undefined;
+        return { nome: f.nome, agenteId: f.agenteId || undefined, gera: f.gera, checkpoint: f.checkpoint, instrucao: f.instrucao || undefined, config };
+      }) };
       return edit === "novo" ? post("/console/metodos", body) : put(`/console/metodos/${(edit as Metodo).id}`, body);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["metodos"] }); setEdit(null); toast("🧭 Método salvo"); },
@@ -177,13 +182,19 @@ export function Metodos() {
                   <button className="modal-x" title="Remover fase" onClick={() => setFases((a) => a.filter((_, j) => j !== i))}>✕</button>
                 </div>
                 <input className="in" style={{ marginTop: 6 }} value={f.gera} onChange={(e) => setFase(i, { gera: e.target.value })} placeholder="O que esta fase gera" />
-                <label className="check-item" style={{ marginTop: 8, fontSize: 12 }}>
-                  <input type="checkbox" checked={f.checkpoint} onChange={(e) => setFase(i, { checkpoint: e.target.checked })} /> checkpoint humano
-                </label>
+                <textarea className="in" style={{ marginTop: 6 }} rows={2} value={f.instrucao} onChange={(e) => setFase(i, { instrucao: e.target.value })} placeholder="Instrução do agente nesta etapa (opcional — sobrepõe o padrão)" />
+                <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <label className="check-item" style={{ fontSize: 12 }}>
+                    <input type="checkbox" checked={f.checkpoint} onChange={(e) => setFase(i, { checkpoint: e.target.checked })} /> checkpoint humano
+                  </label>
+                  <span className="sub" style={{ fontSize: 11.5 }}>Saídas (ex.: histórias):</span>
+                  <input className="in" style={{ width: 70 }} type="number" min={1} value={f.minSaidas} onChange={(e) => setFase(i, { minSaidas: e.target.value })} placeholder="mín" />
+                  <input className="in" style={{ width: 70 }} type="number" min={1} value={f.maxSaidas} onChange={(e) => setFase(i, { maxSaidas: e.target.value })} placeholder="máx" />
+                </div>
               </div>
             ))}
           </div>
-          <button className="btn" style={{ marginTop: 8 }} onClick={() => setFases((a) => [...a, { nome: "", agenteId: ag0(), gera: "", checkpoint: false }])}>+ Adicionar fase</button>
+          <button className="btn" style={{ marginTop: 8 }} onClick={() => setFases((a) => [...a, faseVazia()])}>+ Adicionar fase</button>
         </Modal>
       )}
     </>

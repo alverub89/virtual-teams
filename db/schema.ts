@@ -153,6 +153,8 @@ export const agente = aiWorkspace.table("agente", {
   personalidade: text("personalidade").notNull(),
   nivelModelo: text("nivel_modelo").notNull().default("intermediario"),
   maxTokens: integer("max_tokens").notNull().default(4096),
+  guardRails: jsonb("guard_rails").$type<string[]>().notNull().default([]), // regras/limites do agente
+  origem: text("origem").notNull().default("manual"), // manual | bmad | ia
   ativo: boolean("ativo").notNull().default(true),
 });
 
@@ -164,6 +166,8 @@ export const metodoEtapa = aiWorkspace.table("metodo_etapa", {
   agenteId: uuid("agente_id").references(() => agente.id),
   tipo: text("tipo").notNull().default("automatica"), // automatica|checkpoint
   descricao: text("descricao"),
+  instrucao: text("instrucao"), // prompt específico do agente nesta etapa (sobrepõe o padrão)
+  config: jsonb("config").$type<{ iteracoes?: number; minSaidas?: number; maxSaidas?: number } | null>(),
 });
 
 export const skill = aiWorkspace.table("skill", {

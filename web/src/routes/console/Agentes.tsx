@@ -111,6 +111,7 @@ interface AgenteDetalhe {
   personalidade: string;
   nivelModelo: string;
   maxTokens: number;
+  guardRails: string[];
   ativo: boolean;
   skillIds: string[];
   toolIds: string[];
@@ -131,6 +132,8 @@ export function AgenteEdit() {
 
   const [personalidade, setPersonalidade] = useState("");
   const [nivelModelo, setNivelModelo] = useState("intermediario");
+  const [maxTokens, setMaxTokens] = useState("4096");
+  const [guardRails, setGuardRails] = useState("");
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [toolIds, setToolIds] = useState<string[]>([]);
 
@@ -138,12 +141,19 @@ export function AgenteEdit() {
     if (!agente) return;
     setPersonalidade(agente.personalidade);
     setNivelModelo(agente.nivelModelo);
+    setMaxTokens(String(agente.maxTokens));
+    setGuardRails((agente.guardRails ?? []).join("\n"));
     setSkillIds(agente.skillIds);
     setToolIds(agente.toolIds);
   }, [agente?.id]);
 
   const salvar = useMutation({
-    mutationFn: () => put(`/console/agentes/${id}`, { personalidade, nivelModelo, skillIds, toolIds }),
+    mutationFn: () => put(`/console/agentes/${id}`, {
+      personalidade, nivelModelo,
+      maxTokens: Math.max(256, Math.min(64000, parseInt(maxTokens, 10) || 4096)),
+      guardRails: guardRails.split("\n").map((r) => r.trim()).filter(Boolean),
+      skillIds, toolIds,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agente", id] });
       qc.invalidateQueries({ queryKey: ["agentes"] });
@@ -188,8 +198,12 @@ export function AgenteEdit() {
               </div>
               <div className="fld">
                 <label>Teto de tokens</label>
-                <input className="in" disabled value={agente.maxTokens} />
+                <input className="in" type="number" min={256} max={64000} disabled={!editavel} value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} />
               </div>
+            </div>
+            <div className="fld" style={{ marginTop: 10 }}>
+              <label>Guard rails (uma regra por linha)</label>
+              <textarea className="in" rows={3} disabled={!editavel} value={guardRails} onChange={(e) => setGuardRails(e.target.value)} placeholder="Ex.: Nunca invente dados que não estão no contexto.&#10;Responda sempre em português." />
             </div>
           </div>
           <div className="card card-pad">

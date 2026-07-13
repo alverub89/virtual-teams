@@ -179,9 +179,12 @@ async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 1400
 // cada épico, quebra em várias HISTÓRIAS INVEST testáveis (com critérios de
 // aceite e estimativa). Salva como registros reais no backlog. Retorna as
 // histórias criadas para montar o documento da etapa.
-async function gerarHistoriasIterativo(db: any, ini: any): Promise<any[]> {
+async function gerarHistoriasIterativo(db: any, ini: any, etapa?: any): Promise<any[]> {
   const contexto = await contextoEtapasAnteriores(db, ini);
   const base = `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n${contexto || "(sem documentos anteriores)"}`;
+  const extra = etapa?.instrucao ? `\n\nOrientação da squad para esta etapa: ${etapa.instrucao}` : "";
+  const minH = etapa?.config?.minSaidas ?? 2;
+  const maxH = etapa?.config?.maxSaidas ?? 5;
 
   // 1) Épicos
   let epicos: { nome: string; descricao?: string }[] = [];
@@ -206,11 +209,11 @@ async function gerarHistoriasIterativo(db: any, ini: any): Promise<any[]> {
       const r = await gerarJson({
         tarefa: "historias",
         system:
-          "Você é um Product Owner/Scrum Master. Quebre o ÉPICO em HISTÓRIAS de usuário no formato INVEST, cada uma TESTÁVEL. Responda SOMENTE JSON.",
+          "Você é um Product Owner/Scrum Master. Quebre o ÉPICO em HISTÓRIAS de usuário no formato INVEST, cada uma TESTÁVEL. Responda SOMENTE JSON." + extra,
         instrucao:
           `${base}\n\nÉpico: ${ep.nome}\n${ep.descricao ?? ""}\n\n` +
           'Formato JSON: { "historias": [{ "titulo": "curto", "descricao": "Como <persona>, quero <ação> para <valor>", ' +
-          '"criteriosAceite": ["Dado/Quando/Então…", "…"], "pontos": 1|2|3|5|8 }] } (2 a 5 histórias, independentes e pequenas).',
+          `"criteriosAceite": ["Dado/Quando/Então…", "…"], "pontos": 1|2|3|5|8 }] } (${minH} a ${maxH} histórias, independentes e pequenas).`,
         maxTokens: 1400,
       });
       if (Array.isArray(r?.historias)) hs = r.historias.filter((h: any) => h?.titulo);
@@ -380,10 +383,12 @@ app.post("/:codigo/chat", async (c) => {
     .where(eq(s.agenteTool.agenteId, ag.id));
 
   const contextoAnterior = await contextoEtapasAnteriores(db, ini);
+  const instrucaoEtapa = etapaRow.instrucao ? `\n\nInstrução desta etapa (definida no método): ${etapaRow.instrucao}` : "";
   const system = composeSystemPrompt({
     nome: ag.nome,
     personalidade:
       `${ag.personalidade}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}` +
+      instrucaoEtapa +
       (contextoAnterior
         ? `\n\nVocê JÁ TEM ACESSO aos documentos das etapas anteriores desta iniciativa (abaixo). Use-os como base e NÃO recomece do zero nem peça informação que já está aqui — apenas confirme lacunas pontuais.\n\n${contextoAnterior}`
         : ""),
@@ -393,6 +398,7 @@ app.post("/:codigo/chat", async (c) => {
       "Responda em português, direto ao ponto, no contexto da etapa.",
       "Ao concluir esta etapa, um DOCUMENTO FORMAL é gerado e salvo em Documentação a partir desta conversa — nunca diga que você não cria documentos. Ajude a construir o conteúdo desse documento; se pedirem para vê-lo, oriente a concluir a etapa para gerá-lo (ou apresente uma prévia do documento).",
       "Você recebe os documentos das etapas anteriores no contexto; se perguntarem se tem acesso ao brief/PRD/etc., a resposta é SIM — referencie o conteúdo, não diga que não tem acesso.",
+      ...((ag.guardRails ?? []) as string[]),
     ],
   });
 
@@ -507,7 +513,7 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
   // + o documento da etapa é o backlog. Demais etapas: documento formal via IA.
   let doc: any;
   if (ordem === 4) {
-    const historias = await gerarHistoriasIterativo(db, ini);
+    const historias = await gerarHistoriasIterativo(db, ini, etapaRow);
     const cfg = DOC_ETAPA[4];
     const nEpicos = new Set(historias.map((h) => h.epico)).size;
     const markdown = historias.length ? docDeHistorias(ini, historias) : "_Nenhuma história pôde ser gerada — trabalhe com o agente no chat e conclua novamente._";

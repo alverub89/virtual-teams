@@ -113,6 +113,13 @@
       "when": 1784100000000,
       "tag": "0015_sdd",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784110000000,
+      "tag": "0016_metodo_agente_config",
+      "breakpoints": true
     }
   ]
 }
