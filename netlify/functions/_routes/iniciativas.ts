@@ -153,6 +153,21 @@ const DOC_ETAPA: Record<number, { tipo: string; emoji: string; titulo: (t: strin
   6: { tipo: "doc", emoji: "🚀", titulo: (t) => `Plano de release e GMUD — ${t}`, foco: "um plano de release e GMUD (janela, nível de risco, plano de rollback, checklist de deploy e evidências)" },
 };
 
+// Contexto que "transborda" entre etapas: os documentos já gerados nas etapas
+// anteriores da iniciativa. Cada etapa constrói sobre a anterior (o PRD parte
+// do Brief, a Arquitetura parte do PRD, etc.) em vez de recomeçar do zero.
+async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 1400): Promise<string> {
+  const docs = await db
+    .select()
+    .from(s.documento)
+    .where(eq(s.documento.iniciativaId, ini.id))
+    .orderBy(asc(s.documento.criadoEm));
+  if (!docs.length) return "";
+  return docs
+    .map((d: any) => `### ${d.emoji ?? "📄"} ${d.titulo}\n${(d.conteudo ?? "").slice(0, maxCharsPorDoc)}`)
+    .join("\n\n");
+}
+
 // Gera (via IA) o documento formal da etapa a partir do contexto + conversa e
 // o persiste em `documento`. Retorna o registro criado. Tolerante a falha da
 // IA: cai para um documento montado a partir da própria conversa.
@@ -174,8 +189,10 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
       `Você é ${ag?.nome ?? "o agente da etapa"}. Produza um DOCUMENTO FORMAL em Markdown: ${cfg.foco}. ` +
       "Use títulos (##), listas e tabelas quando ajudar. Seja específico e acionável. " +
       "Entregue SOMENTE o documento final, em português — sem saudações, sem conversa e sem meta-comentários.";
+    const anteriores = await contextoEtapasAnteriores(db, ini);
     const user =
       `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n` +
+      (anteriores ? `Documentos das etapas anteriores (construa SOBRE eles, mantendo consistência):\n${anteriores}\n\n` : "") +
       `Conversa da etapa (fonte):\n${transcript || "(sem conversa registrada; gere o documento a partir do contexto acima)"}`;
     const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 1600, temperature: 0.3 });
     markdown = (res.content ?? "").trim();
@@ -236,14 +253,20 @@ app.post("/:codigo/chat", async (c) => {
     .innerJoin(s.tool, eq(s.agenteTool.toolId, s.tool.id))
     .where(eq(s.agenteTool.agenteId, ag.id));
 
+  const contextoAnterior = await contextoEtapasAnteriores(db, ini);
   const system = composeSystemPrompt({
     nome: ag.nome,
-    personalidade: `${ag.personalidade}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}`,
+    personalidade:
+      `${ag.personalidade}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}` +
+      (contextoAnterior
+        ? `\n\nVocê JÁ TEM ACESSO aos documentos das etapas anteriores desta iniciativa (abaixo). Use-os como base e NÃO recomece do zero nem peça informação que já está aqui — apenas confirme lacunas pontuais.\n\n${contextoAnterior}`
+        : ""),
     skills: agSkills,
     tools: agTools.map((t: any) => ({ ...t, descricao: t.descricao ?? "" })),
     guardRails: [
       "Responda em português, direto ao ponto, no contexto da etapa.",
       "Ao concluir esta etapa, um DOCUMENTO FORMAL é gerado e salvo em Documentação a partir desta conversa — nunca diga que você não cria documentos. Ajude a construir o conteúdo desse documento; se pedirem para vê-lo, oriente a concluir a etapa para gerá-lo (ou apresente uma prévia do documento).",
+      "Você recebe os documentos das etapas anteriores no contexto; se perguntarem se tem acesso ao brief/PRD/etc., a resposta é SIM — referencie o conteúdo, não diga que não tem acesso.",
     ],
   });
 
