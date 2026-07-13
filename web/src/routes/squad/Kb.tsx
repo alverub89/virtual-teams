@@ -18,8 +18,10 @@ interface Artigo {
   origem?: string;
   repo?: string | null;
   progresso?: string | null;
+  tipoDoc?: string | null;
 }
-interface ReposDisp { repos: { id: string; nome: string; linguagem: string | null }[]; temToken: boolean }
+interface TipoDoc { key: string; label: string; emoji: string; padrao: boolean }
+interface ReposDisp { repos: { id: string; nome: string; linguagem: string | null }[]; temToken: boolean; tiposDoc: TipoDoc[] }
 
 const ESCOPOS = [
   { key: "", label: "Todos" },
@@ -42,6 +44,7 @@ export default function Kb() {
   const [gerando, setGerando] = useState(false);
   const [repoSel, setRepoSel] = useState("");
   const [escopoRepo, setEscopoRepo] = useState("squad");
+  const [tiposSel, setTiposSel] = useState<string[]>([]);
 
   const { data: artigos } = useQuery<Artigo[]>({
     queryKey: ["kb", escopo],
@@ -52,14 +55,21 @@ export default function Kb() {
   const { data: reposDisp } = useQuery<ReposDisp>({ queryKey: ["kb-repos"], queryFn: () => api("/kb/repos-disponiveis") });
 
   const gerarDeRepo = useMutation({
-    mutationFn: () => post<Artigo>("/kb/gerar-de-repo", { repo: repoSel, escopo: escopoRepo }),
-    onSuccess: () => {
+    mutationFn: () => post<{ artigos: Artigo[] }>("/kb/gerar-de-repo", { repo: repoSel, escopo: escopoRepo, tipos: tiposSel }),
+    onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["kb"] });
       setGerando(false); setRepoSel("");
-      toast("🤖 Gerando documentação do repositório…");
+      toast(`🤖 Gerando ${r.artigos?.length ?? 0} documento(s) do repositório…`);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
+  const toggleTipo = (k: string) => setTiposSel((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
+  const abrirGerar = () => {
+    setEscopoRepo("squad");
+    setRepoSel(reposDisp?.repos[0]?.nome ?? "");
+    setTiposSel(reposDisp?.tiposDoc.filter((t) => t.padrao).map((t) => t.key) ?? []);
+    setGerando(true);
+  };
 
   const publicar = useMutation({
     mutationFn: () => post<Artigo>("/kb", { titulo, resumo: resumo || undefined, conteudo, escopo: escopoNovo }),
@@ -79,7 +89,7 @@ export default function Kb() {
         description="Aprendizados da squad publicados por escopo. Gere documentação a partir dos repositórios para dar contexto ao time e aos agentes."
         actions={
           <div style={{ display: "flex", gap: 8 }}>
-            <Button onClick={() => { setEscopoRepo("squad"); setRepoSel(reposDisp?.repos[0]?.nome ?? ""); setGerando(true); }}>
+            <Button onClick={abrirGerar}>
               🤖 Gerar do repositório
             </Button>
             <Button variant="primary" onClick={() => setPublicando(true)}>
@@ -104,7 +114,8 @@ export default function Kb() {
               onClick={() => !gerandoArt && navigate(`/squad/kb/${a.id}`)}>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <EscopoChip escopo={a.escopo} />
-                {a.origem === "ia" && <Chip tone="blue">🤖 do repositório</Chip>}
+                {a.tipoDoc && <Chip tone="blue">{(reposDisp?.tiposDoc.find((t) => t.key === a.tipoDoc)?.emoji ?? "📄")} {reposDisp?.tiposDoc.find((t) => t.key === a.tipoDoc)?.label ?? a.tipoDoc}</Chip>}
+                {a.origem === "ia" && !a.tipoDoc && <Chip tone="blue">🤖 do repositório</Chip>}
                 {gerandoArt && <Chip tone="warn">⏳ gerando…</Chip>}
                 {erroArt && <Chip tone="crit">erro</Chip>}
                 {a.endossos.length > 0 && <Chip tone="good">✓ endossado</Chip>}
@@ -160,8 +171,8 @@ export default function Kb() {
           foot={
             <>
               <Button onClick={() => setGerando(false)}>Cancelar</Button>
-              <Button variant="primary" onClick={() => repoSel && gerarDeRepo.mutate()}>
-                {gerarDeRepo.isPending ? "Iniciando…" : "🤖 Gerar"}
+              <Button variant="primary" onClick={() => repoSel && tiposSel.length && gerarDeRepo.mutate()}>
+                {gerarDeRepo.isPending ? "Iniciando…" : `🤖 Gerar ${tiposSel.length || ""} doc(s)`}
               </Button>
             </>
           }
@@ -176,6 +187,19 @@ export default function Kb() {
                     <option key={r.id} value={r.nome}>{r.nome}{r.linguagem ? ` · ${r.linguagem}` : ""}</option>
                   ))}
                 </select>
+              </Fld>
+              <Fld label="Documentos a gerar">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {reposDisp.tiposDoc.map((t) => {
+                    const on = tiposSel.includes(t.key);
+                    return (
+                      <button key={t.key} type="button" onClick={() => toggleTipo(t.key)}
+                        className={`filter-chip ${on ? "active" : ""}`} style={{ borderRadius: 8 }}>
+                        {on ? "✓ " : ""}{t.emoji} {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </Fld>
               <Fld label="Escopo">
                 <select className="in" value={escopoRepo} onChange={(e) => setEscopoRepo(e.target.value)}>

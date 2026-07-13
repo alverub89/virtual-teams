@@ -327,6 +327,7 @@ export const kbArtigo = aiWorkspace.table("kb_artigo", {
   progresso: text("progresso"),
   origem: text("origem").notNull().default("manual"), // manual|ia
   repo: text("repo"), // owner/repo documentado (quando origem = ia)
+  tipoDoc: text("tipo_doc"), // funcional|tecnico|dados|api|operacao (docs de repo)
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 

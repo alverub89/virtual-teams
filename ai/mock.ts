@@ -105,20 +105,52 @@ function talvezCapacidades(req: ChatRequest): string | null {
   });
 }
 
-// KB a partir de repositório: gera uma documentação plausível para a demo.
+// KB a partir de repositório: gera documentação plausível e ESPECÍFICA por tipo
+// (funcional, técnico, dados, api, operação) para a demo rodar sem gateway.
 function talvezKbRepo(req: ChatRequest): string | null {
   if (!/BASE DE CONHECIMENTO|documenta um reposit[oó]rio/i.test(req.system)) return null;
   const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const repo = ultima.match(/reposit[oó]rio\s+(\S+)/i)?.[1] ?? "o repositório";
-  const markdown =
-    `# Documentação — ${repo}\n\n` +
-    `## Visão geral\nServiço responsável por parte do fluxo de pagamentos. Documentação de contexto gerada a partir da leitura do repositório.\n\n` +
-    `## Responsabilidades\n- Expor a API do domínio\n- Orquestrar regras de negócio\n- Persistir e conciliar dados\n\n` +
-    `## Principais módulos\n- \`src/api\` — controladores e rotas\n- \`src/domain\` — regras de negócio\n- \`src/infra\` — integrações e persistência\n\n` +
-    `## Integrações e dependências\nBanco de dados, fila de eventos e serviços internos da plataforma.\n\n` +
-    `## Como rodar\n\`\`\`bash\nnpm install && npm run dev\n\`\`\`\n\n` +
-    `## Pontos de atenção\n- Cobertura de testes nas regras críticas\n- Observabilidade das integrações externas`;
-  return JSON.stringify({ resumo: `Documentação de contexto de ${repo}: propósito, responsabilidades, módulos, integrações e como rodar.`, markdown });
+  const sys = req.system;
+  let titulo = "Documentação";
+  let resumo = `Documentação de contexto de ${repo}.`;
+  let corpo = "";
+  if (/FUNCIONAL/i.test(sys)) {
+    titulo = "📗 Funcional"; resumo = `Visão funcional de ${repo}: propósito, atores, fluxos e regras de negócio.`;
+    corpo =
+      `## Propósito\nEntregar ao usuário a jornada de negócio suportada por ${repo}.\n\n` +
+      `## Atores\n- Usuário final\n- Operador/back-office\n- Sistemas parceiros\n\n` +
+      `## Principais fluxos\n1. Entrada e validação do pedido\n2. Processamento conforme regras de negócio\n3. Confirmação e notificação\n\n` +
+      `## Regras de negócio\n- Elegibilidade e limites\n- Idempotência das operações\n- Trilha de auditoria obrigatória`;
+  } else if (/DADOS/i.test(sys)) {
+    titulo = "🗄️ Dados"; resumo = `Modelo de dados de ${repo}: entidades, esquema e relacionamentos.`;
+    corpo =
+      `## Entidades principais\n\n| Entidade | Descrição | Campos-chave |\n|---|---|---|\n` +
+      `| Pedido | Solicitação do usuário | id, status, valor |\n| Movimento | Lançamento financeiro | id, pedido_id, tipo |\n| Conciliação | Fechamento diário | id, data, total |\n\n` +
+      `## Relacionamentos\n- Pedido 1—N Movimento\n- Movimento N—1 Conciliação\n\n` +
+      `## Persistência\nBanco relacional com migrações versionadas; eventos publicados a cada mudança de estado.`;
+  } else if (/API|INTEGRA/i.test(sys)) {
+    titulo = "🔌 API & Integrações"; resumo = `Contratos e integrações de ${repo}.`;
+    corpo =
+      `## Endpoints\n- \`POST /pedidos\` — cria um pedido\n- \`GET /pedidos/{id}\` — consulta\n- \`POST /pedidos/{id}/confirmar\` — confirma\n\n` +
+      `## Eventos\n- \`pedido.criado\`\n- \`pedido.confirmado\`\n\n` +
+      `## Integrações externas\n- Serviço de liquidação\n- Provedor antifraude`;
+  } else if (/OPERA/i.test(sys)) {
+    titulo = "⚙️ Operação & Deploy"; resumo = `Como configurar, rodar e operar ${repo}.`;
+    corpo =
+      `## Pré-requisitos\nNode 20+, banco relacional, credenciais dos serviços.\n\n` +
+      `## Variáveis de ambiente\n- \`DATABASE_URL\`\n- \`QUEUE_URL\`\n- \`API_KEY\`\n\n` +
+      `## Deploy\n\`\`\`bash\nnpm ci && npm run build && npm run deploy\n\`\`\`\n\n` +
+      `## Runbook\n- Falha de liquidação: reprocessar fila e verificar idempotência\n- Latência alta: checar pool de conexões`;
+  } else {
+    titulo = "📘 Técnico"; resumo = `Visão técnica de ${repo}: arquitetura, módulos e stack.`;
+    corpo =
+      `## Arquitetura\nServiço em camadas (API → domínio → infraestrutura), orientado a eventos.\n\n` +
+      `## Stack\nTypeScript, framework HTTP, ORM e fila de mensagens.\n\n` +
+      `## Módulos\n- \`src/api\` — controladores e rotas\n- \`src/domain\` — regras de negócio\n- \`src/infra\` — persistência e integrações\n\n` +
+      `## Build e testes\n\`\`\`bash\nnpm install && npm test && npm run build\n\`\`\``;
+  }
+  return JSON.stringify({ resumo, markdown: `# ${titulo} — ${repo}\n\n${corpo}` });
 }
 
 function responder(req: ChatRequest): string {

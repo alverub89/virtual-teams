@@ -22,6 +22,7 @@ app.get("/", async (c) => {
       ...a,
       status: a.status ?? "pronto",
       origem: a.origem ?? "manual",
+      tipoDoc: a.tipoDoc ?? null,
       endossos: endossos.filter((e: any) => e.artigoId === a.id).map((e: any) => e.nivel),
     }))
   );
@@ -37,42 +38,54 @@ app.get("/repos-disponiveis", async (c) => {
   const [rt] = sq ? await db.select().from(s.releaseTrain).where(eq(s.releaseTrain.id, sq.releaseTrainId)) : [];
   const [com] = rt ? await db.select().from(s.comunidade).where(eq(s.comunidade.id, rt.comunidadeId)) : [];
   const { resolveGithubToken } = await import("../_lib/capacidades");
+  const { TIPOS_DOC } = await import("../_lib/kbgen");
   return c.json({
     repos: repos.map((r: any) => ({ id: r.id, nome: r.nome, linguagem: r.linguagem ?? null })),
     temToken: !!resolveGithubToken(com),
+    tiposDoc: TIPOS_DOC.map(({ key, label, emoji, padrao }) => ({ key, label, emoji, padrao })),
   });
 });
 
-/* Gera um artigo de KB documentando um repositório (IA lê o repo em background). */
+/* Gera um CONJUNTO de documentos (funcional, técnico, dados, …) de um repositório. */
 app.post("/gerar-de-repo", async (c) => {
   const me = c.get("me");
   if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
+  const { TIPOS_DOC } = await import("../_lib/kbgen");
+  const chaves = TIPOS_DOC.map((t) => t.key) as [string, ...string[]];
   const body = z.object({
     repo: z.string().min(3),
     escopo: z.enum(["squad", "release_train", "comunidade"]).default("squad"),
+    tipos: z.array(z.enum(chaves)).min(1).optional(),
   }).safeParse(await c.req.json());
   if (!body.success) return c.json({ error: "dados inválidos" }, 400);
   const db = await getDb();
   const repos = (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === me.squadId);
   if (!repos.some((r: any) => r.nome === body.data.repo)) return c.json({ error: "repositório não é da squad" }, 404);
 
-  const [artigo] = await db.insert(s.kbArtigo).values({
-    escopo: body.data.escopo,
-    squadId: me.squadId,
-    titulo: `Documentação — ${body.data.repo}`,
-    resumo: "Gerando documentação a partir do repositório…",
-    conteudo: "_Gerando documentação a partir do repositório…_",
-    autorId: me.id,
-    autorNome: me.nome,
-    status: "gerando",
-    origem: "ia",
-    repo: body.data.repo,
-    progresso: "na fila…",
-  }).returning();
+  const tipos = body.data.tipos?.length ? body.data.tipos : TIPOS_DOC.filter((t) => t.padrao).map((t) => t.key);
+  const criados: any[] = [];
+  for (const key of tipos) {
+    const t = TIPOS_DOC.find((x) => x.key === key)!;
+    const [artigo] = await db.insert(s.kbArtigo).values({
+      escopo: body.data.escopo,
+      squadId: me.squadId,
+      titulo: `${t.label} — ${body.data.repo}`,
+      resumo: `Gerando documentação ${t.label.toLowerCase()}…`,
+      conteudo: `_Gerando documentação ${t.label.toLowerCase()} a partir do repositório…_`,
+      autorId: me.id,
+      autorNome: me.nome,
+      status: "gerando",
+      origem: "ia",
+      repo: body.data.repo,
+      tipoDoc: key,
+      progresso: "na fila…",
+    }).returning();
+    criados.push(artigo);
+  }
   const { enqueueKb } = await import("../_lib/kbgen");
-  await enqueueKb(artigo.id);
-  await audit(me, "gerar_kb_repo", `kb:${artigo.titulo}`, { repo: body.data.repo });
-  return c.json(artigo, 201);
+  await enqueueKb(criados.map((a) => a.id));
+  await audit(me, "gerar_kb_repo", `kb:${body.data.repo}`, { repo: body.data.repo, tipos });
+  return c.json({ ok: true, artigos: criados }, 201);
 });
 
 app.get("/:id", async (c) => {
