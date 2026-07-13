@@ -6,6 +6,7 @@ import { useToast } from "../../lib/toast";
 interface EsteiraData {
   execucoes: { id: string; repositorio: string; etapa: string; status: string; detalhe: string | null }[];
   gmuds: { id: string; numero: string; titulo: string; status: string; risco: string; janela: string | null }[];
+  ativa?: boolean;
 }
 
 const GMUD_TONE: Record<string, "blue" | "good" | "warn" | "crit" | "neutral"> = {
@@ -21,25 +22,29 @@ export default function Esteira() {
   const { data: me } = useMe();
   const toast = useToast();
   const qc = useQueryClient();
-  const { data } = useQuery<EsteiraData>({ queryKey: ["esteira"], queryFn: () => api("/esteira") });
+  const { data } = useQuery<EsteiraData>({
+    queryKey: ["esteira"],
+    queryFn: () => api("/esteira"),
+    refetchInterval: (q) => (q.state.data?.ativa ? 1200 : false),
+  });
   const execucoes = [...(data?.execucoes ?? [])].sort(
     (a, b) => ORDEM_ETAPAS.indexOf(a.etapa) - ORDEM_ETAPAS.indexOf(b.etapa)
   );
   const podeAgir = me?.papel === "pm" || me?.papel === "tech_lead";
 
   const disparar = useMutation({
-    mutationFn: () => post<{ ok: boolean; pendente?: boolean; mensagem: string }>("/esteira/disparar", {}),
+    mutationFn: () => post<{ ok: boolean; mensagem: string }>("/esteira/disparar", {}),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["esteira"] });
-      toast(r.ok ? `🚀 ${r.mensagem}` : r.pendente ? `🔌 ${r.mensagem}` : `⚠️ ${r.mensagem}`);
+      toast(`🚀 ${r.mensagem}`);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
   const abrirGmud = useMutation({
-    mutationFn: (titulo: string) => post<{ ok: boolean; pendente?: boolean; mensagem: string; numero: string }>("/esteira/gmud", { titulo }),
+    mutationFn: (titulo: string) => post<{ ok: boolean; mensagem: string; numero: string }>("/esteira/gmud", { titulo }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["esteira"] });
-      toast(r.ok ? `🧾 ${r.mensagem}` : `🔌 GMUD ${r.numero} registrada como rascunho — ${r.mensagem}`);
+      toast(`🧾 ${r.mensagem}`);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });

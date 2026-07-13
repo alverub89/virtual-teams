@@ -115,18 +115,18 @@ app.get("/auditoria", rbac("configurar_plataforma"), async (c) => {
   });
 });
 
-// Config das integrações reais (GitHub Actions + ServiceNow) da comunidade.
-// Credenciais NUNCA passam por aqui — só org/repo/workflow/instância.
+// Config de demonstração da esteira/GMUD da comunidade. A esteira roda
+// SIMULADA dentro do app (sem credenciais/sistemas externos) — estes campos
+// só dão nome ao repositório/instância que aparecem na demo.
 app.get("/integracoes", async (c) => {
   const me = c.get("me");
   const db = await getDb();
-  const { statusIntegracoes } = await import("../_lib/integracoes");
   let cfg: any = null;
   if (me.comunidadeId) {
     [cfg] = (await db.select().from(s.integracaoPlataforma)).filter((i: any) => i.comunidadeId === me.comunidadeId);
   }
   return c.json({
-    status: statusIntegracoes(),
+    demo: true,
     config: cfg
       ? { githubOrg: cfg.githubOrg, githubRepoPadrao: cfg.githubRepoPadrao, githubWorkflow: cfg.githubWorkflow, serviceNowInstance: cfg.serviceNowInstance }
       : { githubOrg: null, githubRepoPadrao: null, githubWorkflow: "deploy.yml", serviceNowInstance: null },

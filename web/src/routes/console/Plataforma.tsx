@@ -204,10 +204,7 @@ export function Metodos() {
 /* ==================== Esteiras & GMUD ==================== */
 
 interface IntegracoesResp {
-  status: {
-    github: { conectado: boolean; motivo: string };
-    serviceNow: { conectado: boolean; motivo: string };
-  };
+  demo?: boolean;
   config: { githubOrg: string | null; githubRepoPadrao: string | null; githubWorkflow: string | null; serviceNowInstance: string | null };
 }
 
@@ -233,52 +230,40 @@ export function EsteiraConfig() {
       githubWorkflow: wfV.trim() || "deploy.yml",
       serviceNowInstance: snV.trim() || null,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["integracoes"] }); toast("💾 Integrações salvas"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["integracoes"] }); toast("💾 Configuração salva"); },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
-  const gh = data?.status.github;
-  const snStatus = data?.status.serviceNow;
-
   return (
     <>
-      <PageHead title="Esteiras & GMUD" description="Gates de qualidade e integrações reais (GitHub Actions + ServiceNow). Configuração da comunidade — squads herdam." />
+      <PageHead title="Esteiras & GMUD" description="Gates de qualidade e a esteira de demonstração. Configuração da comunidade — squads herdam." />
 
-      <div className="grid g2" style={{ alignItems: "start" }}>
-        <Card pad className="cfg-github">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="icon-sq">🐙</span>
-            <div style={{ flex: 1 }}>
-              <h3>GitHub Actions</h3>
-              <p className="sub">Dispara a esteira real (workflow_dispatch) dos repositórios da squad.</p>
+      <Card pad>
+        <div className="banner" style={{ fontSize: 12.5, marginBottom: 14 }}>
+          🎬 <span>Nesta versão a esteira e a GMUD rodam <b>simuladas dentro do app</b> — os gates avançam sozinhos e a GMUD ganha número. Os campos abaixo só dão nome ao repositório/instância que aparecem na demo; nenhuma credencial ou sistema externo é necessário.</span>
+        </div>
+        <div className="grid g2" style={{ alignItems: "start" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span className="icon-sq">🐙</span>
+              <div><h3>Repositório (GitHub)</h3><p className="sub">nome exibido ao disparar a esteira</p></div>
             </div>
-            <Chip tone={gh?.conectado ? "good" : "warn"}>{gh?.conectado ? "conectado" : "não conectado"}</Chip>
+            <Fld label="Organização"><input className="in" value={orgV} onChange={(e) => setOrg(e.target.value)} placeholder="ex.: itau-meios" /></Fld>
+            <Fld label="Repositório padrão"><input className="in" value={repoV} onChange={(e) => setRepo(e.target.value)} placeholder="ex.: split-service" /></Fld>
+            <Fld label="Workflow (arquivo)"><input className="in" value={wfV} onChange={(e) => setWf(e.target.value)} placeholder="deploy.yml" /></Fld>
           </div>
-          <p className="sub" style={{ margin: "8px 0 12px" }}>🔑 {gh?.motivo ?? "…"}</p>
-          <Fld label="Organização"><input className="in" value={orgV} onChange={(e) => setOrg(e.target.value)} placeholder="ex.: itau-meios" /></Fld>
-          <Fld label="Repositório padrão"><input className="in" value={repoV} onChange={(e) => setRepo(e.target.value)} placeholder="ex.: split-service" /></Fld>
-          <Fld label="Workflow (arquivo)"><input className="in" value={wfV} onChange={(e) => setWf(e.target.value)} placeholder="deploy.yml" /></Fld>
-        </Card>
-
-        <Card pad>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="icon-sq">🧾</span>
-            <div style={{ flex: 1 }}>
-              <h3>ServiceNow (GMUD)</h3>
-              <p className="sub">Abre change requests reais ao promover para produção.</p>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span className="icon-sq">🧾</span>
+              <div><h3>ServiceNow (GMUD)</h3><p className="sub">instância exibida na GMUD</p></div>
             </div>
-            <Chip tone={snStatus?.conectado ? "good" : "warn"}>{snStatus?.conectado ? "conectado" : "não conectado"}</Chip>
+            <Fld label="Instância ServiceNow"><input className="in" value={snV} onChange={(e) => setSn(e.target.value)} placeholder="ex.: itau (→ itau.service-now.com)" /></Fld>
           </div>
-          <p className="sub" style={{ margin: "8px 0 12px" }}>🔑 {snStatus?.motivo ?? "…"}</p>
-          <Fld label="Instância ServiceNow"><input className="in" value={snV} onChange={(e) => setSn(e.target.value)} placeholder="ex.: itau (→ itau.service-now.com)" /></Fld>
-          <div className="banner" style={{ marginTop: 12, fontSize: 12 }}>
-            🔒 <span>As credenciais (tokens/senhas) ficam em variáveis de ambiente do servidor — nunca no banco. Sem elas, disparos ficam <b>pendentes</b> e a GMUD é registrada como rascunho local.</span>
-          </div>
-        </Card>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <Button variant="primary" onClick={() => salvar.mutate()}>{salvar.isPending ? "Salvando…" : "💾 Salvar integrações"}</Button>
-      </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Button variant="primary" onClick={() => salvar.mutate()}>{salvar.isPending ? "Salvando…" : "💾 Salvar configuração"}</Button>
+        </div>
+      </Card>
 
       <div className="card card-pad" style={{ marginTop: 14 }}>
         <h3>Gates de qualidade (esteira padrão)</h3>
