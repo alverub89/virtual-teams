@@ -41,7 +41,21 @@ async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok
   // 1) metadados do repo (valida acesso e descobre o branch padrão)
   const meta = await ghGet(`${GH}/repos/${nome}`, token);
   if (!meta.ok) {
-    const erro = dicaErro(meta.status);
+    let erro = dicaErro(meta.status);
+    // Refina o 404: o token é válido? de quem? — para dizer se falta acesso ou o token está ruim.
+    if (meta.status === 404) {
+      if (!token) {
+        erro = "repo não encontrado ou privado (nenhum token configurado — defina GITHUB_TOKEN)";
+      } else {
+        const who = await ghGet(`${GH}/user`, token);
+        if (!who.ok) {
+          erro = `token não reconhecido pelo GitHub (${who.status}) — verifique se copiou inteiro/não expirou`;
+        } else {
+          let login = "?"; try { login = JSON.parse(who.text).login; } catch { /* */ }
+          erro = `token de "${login}" é válido, mas SEM acesso a ${nome} — se o repo é privado, use um classic com scope 'repo' OU inclua este repo num token fine-grained`;
+        }
+      }
+    }
     return { nome, ok: false, erro, contexto: `Repositório ${nome}: NÃO foi possível ler (${erro}).` };
   }
   let repo: any = {};
