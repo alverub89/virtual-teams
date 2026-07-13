@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { Chip, HBar, Kpi, PageHead } from "../../components/ui";
+import { Chip, EstadoErro, HBar, Kpi, PageHead } from "../../components/ui";
 
 interface Indicadores {
   kpis: {
@@ -18,7 +18,9 @@ interface Indicadores {
 }
 
 export default function Indicadores() {
-  const { data } = useQuery<Indicadores>({ queryKey: ["indicadores"], queryFn: () => api("/gestao/indicadores") });
+  const { data, error } = useQuery<Indicadores>({ queryKey: ["indicadores"], queryFn: () => api("/gestao/indicadores") });
+
+  if (error) return <><PageHead title="Indicadores" description="Lead time, GMUDs, consumo de IA e progresso de OKRs." /><EstadoErro error={error} /></>;
 
   return (
     <>
@@ -26,9 +28,12 @@ export default function Indicadores() {
         title="Indicadores"
         description="O fluxo de produção da diretoria — da ideia ao deploy — com lead time, GMUDs e custo de IA."
       />
+      {data && data.kpis.iniciativasAtivas === 0 && data.kpis.runsAutonomos === 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>ℹ️ Ainda sem dados suficientes — os indicadores se preenchem conforme as squads criam iniciativas, executam runs e registram GMUDs.</div>
+      )}
       <div className="grid g4" style={{ marginBottom: 14 }}>
-        <Kpi label="Iniciativas ativas" value={data?.kpis.iniciativasAtivas ?? "…"} delta={data ? `${data.kpis.squads} squads` : undefined} />
-        <Kpi label="Lead time — ideia ao deploy" value={data?.kpis.leadTimeDias ?? "…"} suffix="dias" delta="−8 dias vs. trimestre anterior" tone="up" />
+        <Kpi label="Iniciativas ativas" value={data ? data.kpis.iniciativasAtivas : "…"} delta={data ? `${data.kpis.squads} squads` : undefined} />
+        <Kpi label="Lead time — ideia ao deploy" value={data ? (data.kpis.leadTimeDias ?? "—") : "…"} suffix="dias" />
         <Kpi label="Sucesso de GMUD (90d)" value={data?.kpis.taxaSucessoGmud != null ? `${data.kpis.taxaSucessoGmud}%` : "…"} delta={data ? `${data.gmuds90d.length} mudanças` : undefined} />
         <Kpi label="Custo de IA no mês" value={data ? `R$ ${data.kpis.custoIaMes.toFixed(0)}` : "…"} delta={data ? `${data.kpis.runsAutonomos} runs autônomos` : undefined} />
       </div>

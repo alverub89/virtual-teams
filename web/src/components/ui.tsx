@@ -2,6 +2,21 @@ import type { CSSProperties, ReactNode } from "react";
 
 // Primitivos do design system, recortados do protótipo (docs/spec, seção 4.0).
 
+// Estado de erro de carregamento — mostra mensagem clara (permissão-aware) em
+// vez de deixar a tela travada em "Carregando…".
+export function EstadoErro({ error }: { error: unknown }) {
+  const status = (error as { status?: number })?.status;
+  const msg = (error as { message?: string })?.message ?? "Erro ao carregar";
+  const semPermissao = status === 403;
+  return (
+    <div className="card" style={{ textAlign: "center", padding: 28, maxWidth: 560, margin: "12px auto" }}>
+      <div style={{ fontSize: 30 }}>{semPermissao ? "🔒" : "⚠️"}</div>
+      <h3 style={{ margin: "8px 0 4px" }}>{semPermissao ? "Sem permissão para esta área" : "Não foi possível carregar"}</h3>
+      <p className="sub">{semPermissao ? "Seu papel atual não tem acesso a esta tela. Troque de perfil ou peça acesso ao CTO." : msg}</p>
+    </div>
+  );
+}
+
 export function Chip({
   tone = "neutral",
   children,

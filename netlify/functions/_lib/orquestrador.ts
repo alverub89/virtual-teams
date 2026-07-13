@@ -30,7 +30,10 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
           : `aprovado pelo Master (nota ${parecer?.nota ?? "?"}/10)`;
         await db.update(s.execucaoAutonoma).set({ progresso: `"${nomeEtapa}": ${txt}`, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
       };
-      const r = await concluirEtapaAtual(db, ini, "Orquestrador", { critico: true, onRodada });
+      const onProgresso = async (txt: string) => {
+        await db.update(s.execucaoAutonoma).set({ progresso: `"${nomeEtapa}": ${txt.replace(/^Desenvolvimento:\s*/, "")}`, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
+      };
+      const r = await concluirEtapaAtual(db, ini, "Orquestrador", { critico: true, onRodada, onProgresso });
       ordem += 1;
       const rev = r.revisao;
       const nota = rev ? ` · Master ${rev.nota}/10 em ${rev.rodadas} rodada(s)` : "";

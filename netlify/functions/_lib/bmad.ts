@@ -37,13 +37,29 @@ export const BMAD_CHECKLISTS = [
 ];
 
 // Instala o acervo BMAD (idempotente por nome+origem). Retorna as contagens.
+// Chave do papel do agente (para não duplicar "Analista" x "Agente Analista").
+function papelChave(nome: string, papel = ""): string {
+  const t = `${nome} ${papel}`.toLowerCase();
+  if (/analis/.test(t)) return "analista";
+  if (/\bpm\b|product|produto/.test(t)) return "pm";
+  if (/arquit/.test(t)) return "arquiteto";
+  if (/scrum|\bsm\b|hist[óo]ria/.test(t)) return "scrum";
+  if (/desenvolv|\bdev\b|implement/.test(t)) return "dev";
+  if (/\bqa\b|qualidade|test/.test(t)) return "qa";
+  if (/orquestr|master|coorden/.test(t)) return "orquestrador";
+  return t.trim();
+}
+
 export async function instalarBmad(db: any, comunidadeId?: string | null) {
   const contagem = { agentes: 0, skills: 0, templates: 0, checklists: 0 };
 
   const agentesExist = await db.select().from(s.agente);
+  const papeisExist = new Set(agentesExist.map((x: any) => papelChave(x.nome, x.papel)));
   for (const a of BMAD_AGENTES) {
-    if (agentesExist.some((x: any) => x.origem === "bmad" && x.nome === a.nome)) continue;
+    // Não duplica se já existe um agente com o mesmo papel (ex.: seed padrão).
+    if (papeisExist.has(papelChave(a.nome, a.papel))) continue;
     await db.insert(s.agente).values({ ...a, origem: "bmad", ativo: true });
+    papeisExist.add(papelChave(a.nome, a.papel));
     contagem.agentes++;
   }
   const skillsExist = await db.select().from(s.skill);

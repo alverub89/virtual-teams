@@ -666,7 +666,7 @@ app.post("/:codigo/chat", async (c) => {
 // etapa de Histórias), marca como concluída, avança e abre a próxima. Retorna
 // o documento, a próxima etapa e se a iniciativa terminou. Reutilizado pelo
 // endpoint manual e pelo orquestrador da execução autônoma.
-export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador", opts?: { critico?: boolean; onRodada?: OnRodada }): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean; revisao?: { rodadas: number; nota: number; problemas: string[] }; sddCount?: number }> {
+export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador", opts?: { critico?: boolean; onRodada?: OnRodada; onProgresso?: (txt: string) => Promise<void> | void }): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean; revisao?: { rodadas: number; nota: number; problemas: string[] }; sddCount?: number }> {
   const ordem = ini.etapaAtual;
   const [etapaRow] = await db.select().from(s.iniciativaEtapa).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
   if (!etapaRow) return { ok: false, erro: "etapa atual não encontrada", proxima: null, terminou: true };
@@ -696,8 +696,9 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
   // modo autônomo (fica em Documentação, um doc por história).
   let sddCount = 0;
   if (opts?.critico && /desenvolv|implement|c[óo]digo/i.test(etapaRow.nome)) {
-    await opts.onRodada?.(1, "produzir");
-    sddCount = await gerarSddsPendentes(db, ini, ag?.nome ?? autorNome, 12);
+    sddCount = await gerarSddsPendentes(db, ini, ag?.nome ?? autorNome, 12, async (i, total, hcod) => {
+      await opts.onProgresso?.(`Desenvolvimento: gerando SDD ${i}/${total} (${hcod})…`);
+    });
   }
 
   await db.update(s.iniciativaEtapa).set({
@@ -804,15 +805,15 @@ async function gerarSddDaHistoria(db: any, ini: any, h: any, autorNome: string):
 
 // Gera SDDs (na sequência) para as histórias que ainda não têm — usado na etapa
 // de Desenvolvimento. Bounded para caber no tempo. Retorna quantos gerou.
-async function gerarSddsPendentes(db: any, ini: any, autorNome: string, cap = 12): Promise<number> {
+async function gerarSddsPendentes(db: any, ini: any, autorNome: string, cap = 12, onCada?: (i: number, total: number, hCodigo: string) => Promise<void> | void): Promise<number> {
   const hs = (await db.select().from(s.historia)).filter((x: any) => x.iniciativaId === ini.id).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
   const comSdd = new Set((await db.select().from(s.documento)).filter((d: any) => d.tipo === "sdd" && d.iniciativaId === ini.id).map((d: any) => d.historiaId));
+  const pendentes = hs.filter((h: any) => !comSdd.has(h.id)).slice(0, cap);
   let n = 0;
-  for (const h of hs) {
-    if (n >= cap) break;
-    if (comSdd.has(h.id)) continue;
-    await gerarSddDaHistoria(db, ini, h, autorNome);
+  for (const h of pendentes) {
     n++;
+    await onCada?.(n, pendentes.length, h.codigo);
+    await gerarSddDaHistoria(db, ini, h, autorNome);
   }
   return n;
 }

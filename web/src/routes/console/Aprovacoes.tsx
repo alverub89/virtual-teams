@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post } from "../../lib/api";
-import { Button, Card, Chip, PageHead } from "../../components/ui";
+import { Button, Card, Chip, EstadoErro, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
 interface Tool { id: string; nome: string; descricao: string | null; permissao: string; execucao: string; squadNome: string | null }
@@ -11,7 +11,7 @@ interface Fila { tools: Tool[]; mcps: Mcp[] }
 export default function Aprovacoes() {
   const toast = useToast();
   const qc = useQueryClient();
-  const { data } = useQuery<Fila>({ queryKey: ["aprovacoes"], queryFn: () => api("/console/aprovacoes") });
+  const { data, error, isLoading } = useQuery<Fila>({ queryKey: ["aprovacoes"], queryFn: () => api("/console/aprovacoes") });
   const [escopo, setEscopo] = useState<Record<string, string>>({});
 
   const invalidar = () => { qc.invalidateQueries({ queryKey: ["aprovacoes"] }); qc.invalidateQueries({ queryKey: ["mcps"] }); qc.invalidateQueries({ queryKey: ["tools"] }); };
@@ -33,7 +33,8 @@ export default function Aprovacoes() {
     fn.mutate({ id, decisao: "rejeitar", motivo, ...extra });
   };
 
-  if (!data) return <p className="muted">Carregando…</p>;
+  if (error) return <><PageHead title="Aprovações" description="Tools e MCPs publicados pelas squads, aguardando o CTO." /><EstadoErro error={error} /></>;
+  if (isLoading || !data) return <p className="muted">Carregando…</p>;
   const vazio = data.tools.length === 0 && data.mcps.length === 0;
 
   return (
