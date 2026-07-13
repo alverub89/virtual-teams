@@ -19,9 +19,12 @@ export default function PopularDemo() {
     onError: (e) => setMsg(`Erro: ${(e as Error).message}`),
   });
 
-  const voltar = useMutation({
-    mutationFn: () => post("/console/voltar-cto"),
-    onSuccess: () => { window.location.href = "/console"; },
+  const rollback = useMutation({
+    mutationFn: () => post<{ deleted: Record<string, number> }>("/console/rollback-demo"),
+    onSuccess: (r) => {
+      setMsg(`Rollback feito: ${r.deleted.squads ?? 0} squad e ${r.deleted.membros ?? 0} membros de demo removidos. Voltando para o console…`);
+      setTimeout(() => { window.location.href = "/console"; }, 1200);
+    },
     onError: (e) => setMsg(`Erro: ${(e as Error).message}`),
   });
 
@@ -38,7 +41,9 @@ export default function PopularDemo() {
           <Button variant="primary" onClick={() => popular.mutate()}>
             {popular.isPending ? "Populando…" : "🚀 Popular e entrar como Tech Lead"}
           </Button>
-          <Button onClick={() => voltar.mutate()}>Voltar a ser CTO</Button>
+          <Button onClick={() => confirm("Apagar a squad de demo e o time (@itau-demo.com) e voltar a ser CTO?") && rollback.mutate()}>
+            {rollback.isPending ? "Apagando…" : "🧹 Rollback (apagar demo)"}
+          </Button>
         </div>
         {msg && <div className="prompt-box" style={{ marginTop: 14 }}>{msg}</div>}
         <p className="sub" style={{ marginTop: 16, fontSize: 12 }}>

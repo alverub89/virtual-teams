@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { schema as s } from "../../../db/client";
 import { hashPassword } from "./password";
 
@@ -147,4 +147,69 @@ export async function seedDemoSquad(db: any, pessoaId: string) {
       docs: await cont(s.documento, (d: any) => d.squadId === sqId),
     },
   };
+}
+
+// Remove TUDO que o seed criou (squad de demo + time @itau-demo.com) na
+// comunidade da pessoa, na ordem correta das FKs. Não apaga a comunidade nem a
+// própria pessoa. Retorna contagens do que foi apagado.
+export async function rollbackDemoSquad(db: any, pessoaId: string) {
+  const [me] = await db.select().from(s.pessoa).where(eq(s.pessoa.id, pessoaId));
+  if (!me?.comunidadeId) return { squads: 0 };
+  const comId = me.comunidadeId;
+
+  const rts = (await db.select().from(s.releaseTrain)).filter((r: any) => r.comunidadeId === comId);
+  const rtIds = new Set(rts.map((r: any) => r.id));
+  const squads = (await db.select().from(s.squad)).filter((sq: any) => rtIds.has(sq.releaseTrainId) && sq.nome === "Squad Pix Cobranca");
+  const squadIds = squads.map((sq: any) => sq.id);
+
+  const del = async (tbl: any, col: any, ids: string[]) => { if (ids.length) await db.delete(tbl).where(inArray(col, ids)); };
+
+  if (squadIds.length) {
+    const iniIds = (await db.select().from(s.iniciativa)).filter((i: any) => squadIds.includes(i.squadId)).map((i: any) => i.id);
+    const okrIds = (await db.select().from(s.okr)).filter((o: any) => squadIds.includes(o.squadId)).map((o: any) => o.id);
+    const krIds = (await db.select().from(s.keyResult)).filter((k: any) => okrIds.includes(k.okrId)).map((k: any) => k.id);
+    const runIds = (await db.select().from(s.execucaoAutonoma)).filter((e: any) => squadIds.includes(e.squadId)).map((e: any) => e.id);
+    const repoIds = (await db.select().from(s.repositorio)).filter((r: any) => squadIds.includes(r.squadId)).map((r: any) => r.id);
+    const kbIds = (await db.select().from(s.kbArtigo)).filter((k: any) => squadIds.includes(k.squadId)).map((k: any) => k.id);
+
+    // runs primeiro: execucao_autonoma.kr_id referencia key_result
+    await del(s.execucaoCheckpoint, s.execucaoCheckpoint.execucaoId, runIds);
+    await del(s.execucaoPasso, s.execucaoPasso.execucaoId, runIds);
+    await del(s.execucaoAutonoma, s.execucaoAutonoma.id, runIds);
+
+    await del(s.krMedicao, s.krMedicao.krId, krIds);
+    await del(s.krFeature, s.krFeature.krId, krIds);
+    await del(s.keyResult, s.keyResult.okrId, okrIds);
+    await del(s.okr, s.okr.id, okrIds);
+
+    await del(s.mensagemChat, s.mensagemChat.iniciativaId, iniIds);
+    await del(s.historia, s.historia.iniciativaId, iniIds);
+    await del(s.iniciativaEtapa, s.iniciativaEtapa.iniciativaId, iniIds);
+    await del(s.pullRequest, s.pullRequest.repositorioId, repoIds);
+    await del(s.execucaoEsteira, s.execucaoEsteira.squadId, squadIds);
+    await del(s.gmud, s.gmud.squadId, squadIds);
+    await del(s.documento, s.documento.squadId, squadIds);
+    await del(s.kbEndosso, s.kbEndosso.artigoId, kbIds);
+    await del(s.kbArtigo, s.kbArtigo.id, kbIds);
+    await del(s.iniciativa, s.iniciativa.id, iniIds);
+    await del(s.capacidade, s.capacidade.squadId, squadIds);
+    await del(s.repositorio, s.repositorio.id, repoIds);
+    await del(s.consumoTokens, s.consumoTokens.squadId, squadIds);
+  }
+
+  // Time de demo (@itau-demo.com nesta comunidade + qualquer um ligado às squads),
+  // exceto a própria pessoa.
+  const team = (await db.select().from(s.pessoa)).filter(
+    (p: any) => p.id !== pessoaId && p.comunidadeId === comId && (String(p.email).toLowerCase().endsWith("@itau-demo.com") || squadIds.includes(p.squadId))
+  );
+  const teamIds = team.map((p: any) => p.id);
+  await del(s.sessao, s.sessao.pessoaId, teamIds);
+  await del(s.auditLog, s.auditLog.pessoaId, teamIds);
+  await del(s.pessoa, s.pessoa.id, teamIds);
+
+  // Desliga a pessoa da squad antes de apagá-la e remove as squads de demo.
+  await db.update(s.pessoa).set({ squadId: null }).where(eq(s.pessoa.id, pessoaId));
+  await del(s.squad, s.squad.id, squadIds);
+
+  return { squads: squadIds.length, membros: teamIds.length };
 }

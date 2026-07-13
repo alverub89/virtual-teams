@@ -896,7 +896,7 @@ app.post("/seed-demo", async (c) => {
   return c.json({ ok: true, counts, me: novoMe });
 });
 
-// Volta o usuário para CTO (renova a sessão). Reversão do seed-demo.
+// Volta o usuário para CTO (renova a sessão). Reversão leve do seed-demo.
 app.post("/voltar-cto", async (c) => {
   const me = c.get("me");
   const db = await getDb();
@@ -905,6 +905,21 @@ app.post("/voltar-cto", async (c) => {
   const novoMe = await meDaPessoa(db, p);
   setCookie(c, sessionCookieName, await signSession(novoMe), cookieOpts());
   return c.json({ ok: true, me: novoMe });
+});
+
+// Rollback COMPLETO do seed: apaga a squad de demo + o time, volta a pessoa
+// para CTO e renova a sessão. Não apaga a comunidade nem a própria pessoa.
+app.post("/rollback-demo", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const { rollbackDemoSquad } = await import("../_lib/seed-demo");
+  const deleted = await rollbackDemoSquad(db, me.id);
+  await db.update(s.pessoa).set({ papel: "cto", squadId: null }).where(eq(s.pessoa.id, me.id));
+  const [p] = await db.select().from(s.pessoa).where(eq(s.pessoa.id, me.id));
+  const novoMe = await meDaPessoa(db, p);
+  setCookie(c, sessionCookieName, await signSession(novoMe), cookieOpts());
+  await audit(me, "rollback_demo", "seed-demo", deleted);
+  return c.json({ ok: true, deleted, me: novoMe });
 });
 
 export default app;
