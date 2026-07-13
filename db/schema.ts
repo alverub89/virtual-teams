@@ -168,6 +168,11 @@ export const conexaoMcp = aiWorkspace.table("conexao_mcp", {
   slug: text("slug"), // endpoint vivo: /mcp/:slug (único quando gerado pela plataforma)
   proposito: text("proposito"), // o que este MCP entrega, para a IA compor o manifesto
   geradoEm: timestamp("gerado_em", { withTimezone: true }), // quando a IA gerou o manifesto+handlers
+  // Governança: squad cria (rascunho) → publica (pendente) → CTO aprova/rejeita.
+  aprovacao: text("aprovacao").notNull().default("aprovado"), // rascunho|pendente|aprovado|rejeitado
+  criadoPor: uuid("criado_por"),
+  submetidoEm: timestamp("submetido_em", { withTimezone: true }),
+  motivoRejeicao: text("motivo_rejeicao"),
 });
 
 export const tool = aiWorkspace.table("tool", {
@@ -181,6 +186,11 @@ export const tool = aiWorkspace.table("tool", {
   inputSchema: jsonb("input_schema").$type<Record<string, unknown>>(), // JSON Schema gerado p/ tools/list
   handlerConfig: jsonb("handler_config").$type<Record<string, unknown>>(), // ia: {prompt}; http: {metodo,url,headers,body}
   comunidadeId: uuid("comunidade_id"),
+  squadId: uuid("squad_id"), // tool criada por uma squad
+  aprovacao: text("aprovacao").notNull().default("aprovado"), // rascunho|pendente|aprovado|rejeitado
+  criadoPor: uuid("criado_por"),
+  submetidoEm: timestamp("submetido_em", { withTimezone: true }),
+  motivoRejeicao: text("motivo_rejeicao"),
 });
 
 export const agenteTool = aiWorkspace.table("agente_tool", {

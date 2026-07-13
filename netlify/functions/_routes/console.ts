@@ -922,4 +922,49 @@ app.post("/rollback-demo", async (c) => {
   return c.json({ ok: true, deleted, me: novoMe });
 });
 
+/* ---------- Aprovações do CTO (tools/MCPs publicados por squads) ---------- */
+
+// Fila de aprovação: tudo que as squads publicaram (aprovacao = pendente).
+app.get("/aprovacoes", cfg, async (c) => {
+  const db = await getDb();
+  const squads = await db.select().from(s.squad);
+  const nomeSquad = (id: string | null) => squads.find((sq: any) => sq.id === id)?.nome ?? null;
+  const tools = (await db.select().from(s.tool)).filter((t: any) => t.aprovacao === "pendente");
+  const mcps = (await db.select().from(s.conexaoMcp)).filter((m: any) => m.aprovacao === "pendente");
+  return c.json({
+    tools: tools.map((t: any) => ({ ...t, squadNome: nomeSquad(t.squadId) })),
+    mcps: mcps.map((m: any) => ({ ...m, squadNome: nomeSquad(m.squadId) })),
+  });
+});
+
+const Decisao = z.object({
+  decisao: z.enum(["aprovar", "rejeitar"]),
+  motivo: z.string().optional(),
+  escopo: z.enum(["squad", "global"]).optional(), // só MCP: CTO escolhe abrangência ao aprovar
+});
+
+const decidir = (tbl: any, tipo: string) => async (c: any) => {
+  const me = c.get("me");
+  const body = Decisao.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const id = c.req.param("id");
+  const [row] = await db.select().from(tbl).where(eq(tbl.id, id));
+  if (!row) return c.json({ error: "não encontrado" }, 404);
+  if (body.data.decisao === "aprovar") {
+    const patch: any = { aprovacao: "aprovado", motivoRejeicao: null };
+    if (tbl === s.conexaoMcp && body.data.escopo) {
+      patch.escopo = body.data.escopo;
+      patch.squadId = body.data.escopo === "global" ? null : row.squadId;
+    }
+    await db.update(tbl).set(patch).where(eq(tbl.id, id));
+  } else {
+    await db.update(tbl).set({ aprovacao: "rejeitado", motivoRejeicao: body.data.motivo ?? "sem motivo informado" }).where(eq(tbl.id, id));
+  }
+  await audit(me, `${body.data.decisao}_${tipo}`, `${tipo}:${id}`, { motivo: body.data.motivo, escopo: body.data.escopo });
+  return c.json({ ok: true });
+};
+app.post("/aprovacoes/tool/:id", cfg, decidir(s.tool, "tool"));
+app.post("/aprovacoes/mcp/:id", cfg, decidir(s.conexaoMcp, "mcp"));
+
 export default app;

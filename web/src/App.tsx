@@ -10,6 +10,7 @@ import RequireAuth from "./routes/RequireAuth";
 import Iniciativas from "./routes/squad/Iniciativas";
 import Time from "./routes/squad/Time";
 import Assistente from "./routes/squad/Assistente";
+import Lab from "./routes/squad/Lab";
 import Jornada from "./routes/squad/Jornada";
 import Okrs from "./routes/squad/Okrs";
 import Autonoma from "./routes/squad/Autonoma";
@@ -28,6 +29,7 @@ import Agentes, { AgenteEdit } from "./routes/console/Agentes";
 import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plataforma";
 import McpDetalhe from "./routes/console/McpDetalhe";
 import Playground from "./routes/console/Playground";
+import Aprovacoes from "./routes/console/Aprovacoes";
 import PopularDemo from "./routes/PopularDemo";
 import Indicadores from "./routes/gestao/Indicadores";
 import { DocsComunidade, DocsFeatures } from "./routes/gestao/DocsGestao";
@@ -63,6 +65,7 @@ export default function App() {
             <Route path="/squad/iniciativas/:codigo" element={<Jornada />} />
             <Route path="/squad/time" element={<Time />} />
             <Route path="/squad/assistente" element={<Assistente />} />
+            <Route path="/squad/lab" element={<Lab />} />
             <Route path="/squad/okrs" element={<Okrs />} />
             <Route path="/squad/autonoma" element={<Autonoma />} />
             <Route path="/squad/capacidades" element={<Capacidades />} />
@@ -95,6 +98,7 @@ export default function App() {
             <Route path="/console/mcps" element={<Mcps />} />
             <Route path="/console/mcps/:id" element={<McpDetalhe />} />
             <Route path="/console/playground" element={<Playground />} />
+            <Route path="/console/aprovacoes" element={<Aprovacoes />} />
           </Route>
 
           <Route

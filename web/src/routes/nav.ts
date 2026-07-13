@@ -51,6 +51,13 @@ export const SQUAD_NAV: NavSection[] = [
         fase: "Fase 1",
       },
       {
+        path: "/squad/lab",
+        label: "Tools & MCPs",
+        title: "Tools & MCPs da squad",
+        description: "Crie tools e MCPs e publique para aprovação do CTO.",
+        fase: "Fase 2",
+      },
+      {
         path: "/squad/okrs",
         label: "OKRs",
         title: "OKRs",
@@ -182,6 +189,13 @@ export const CONSOLE_NAV: NavSection[] = [
         label: "Playground",
         title: "Playground de MCP",
         description: "MCP real pronto para demonstração + catálogo de MCPs do mercado.",
+        fase: "Fase 2",
+      },
+      {
+        path: "/console/aprovacoes",
+        label: "Aprovações",
+        title: "Aprovações",
+        description: "Tools e MCPs publicados pelas squads, aguardando o CTO.",
         fase: "Fase 2",
       },
     ],
