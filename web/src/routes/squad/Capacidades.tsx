@@ -40,6 +40,12 @@ export default function Capacidades() {
   const [reposText, setReposText] = useState("");
   const [tokenModal, setTokenModal] = useState(false);
   const [token, setToken] = useState("");
+  const [teste, setTeste] = useState<{ temToken: boolean; tokenOk: boolean; login: string | null; repos: { nome: string; ok: boolean; status: number; privado: boolean | null }[] } | null>(null);
+  const testar = useMutation({
+    mutationFn: () => post<any>("/capacidades-mapa/testar-token"),
+    onSuccess: (r) => setTeste(r),
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   const invalidar = () => qc.invalidateQueries({ queryKey: ["capacidades-mapa"] });
 
@@ -91,6 +97,7 @@ export default function Capacidades() {
         actions={data.podeEditar && (
           <>
             <Button onClick={() => setTokenModal(true)}>🔑 Token GitHub</Button>
+            <Button onClick={() => { setTeste(null); testar.mutate(); }}>{testar.isPending ? "Testando…" : "🧪 Testar token"}</Button>
             {data.reposNovos.length > 0 && data.mapaAtual && !data.analisando && <Button onClick={() => avaliar.mutate()}>⚠️ Avaliar impacto ({data.reposNovos.length})</Button>}
             {!data.analisando && <Button variant="primary" onClick={() => gerar.mutate()}>{data.mapaAtual ? "Regerar" : "🧠 Gerar mapa"}</Button>}
           </>
@@ -171,6 +178,29 @@ export default function Capacidades() {
           <Fld label="Repositórios"><textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"itau/pix-cobranca\nitau/pix-core"} /></Fld>
         </Modal>
       )}
+      {teste && (
+        <Modal title="🧪 Teste do token do GitHub" onClose={() => setTeste(null)} foot={<Button variant="primary" onClick={() => setTeste(null)}>Fechar</Button>}>
+          {!teste.temToken && <p className="empty-note">Nenhum token configurado. Use <b>🔑 Token GitHub</b> ou a env var <code>GITHUB_TOKEN</code>.</p>}
+          {teste.temToken && (
+            <>
+              <p className="sub" style={{ marginBottom: 8 }}>
+                {teste.tokenOk ? <>✅ Token válido — conta <b>{teste.login}</b></> : <>❌ Token <b>não reconhecido</b> pelo GitHub (inválido/expirado/incompleto)</>}
+              </p>
+              <div className="sec-title">Acesso aos repositórios</div>
+              {teste.repos.map((r) => (
+                <div key={r.nome} className="tool-pick" style={{ cursor: "default" }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="tp-name">{r.ok ? "✅" : "❌"} {r.nome}</div>
+                    <div className="tp-src">{r.ok ? `ok${r.privado ? " · privado" : r.privado === false ? " · público" : ""}` : `HTTP ${r.status}${r.status === 404 ? " — sem acesso a este repo (scope/inclusão do repo)" : ""}`}</div>
+                  </div>
+                </div>
+              ))}
+              {teste.repos.some((r) => !r.ok) && <div className="banner" style={{ marginTop: 8 }}>💡 <span>Repo privado precisa de token <b>classic com scope <code>repo</code></b> ou <b>fine-grained incluindo o repo</b> (Contents: Read).</span></div>}
+            </>
+          )}
+        </Modal>
+      )}
+
       {tokenModal && (
         <Modal title="Conectar token do GitHub" subtitle="PAT com scope repo — usado para ler pastas e arquivos dos repos." onClose={() => setTokenModal(false)}
           foot={<><Button onClick={() => setTokenModal(false)}>Cancelar</Button><Button variant="primary" onClick={() => token.length >= 4 && salvarToken.mutate()}>{salvarToken.isPending ? "…" : "Salvar"}</Button></>}>

@@ -87,6 +87,22 @@ async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok
   return { nome, ok: true, contexto };
 }
 
+// Testa o token: quem é (login), se é válido, e o acesso a cada repo da squad.
+export async function testarToken(token: string | undefined, repos: string[]) {
+  if (!token) return { temToken: false, tokenOk: false, login: null, repos: repos.map((nome) => ({ nome, ok: false, status: 0, privado: null })) };
+  const who = await ghGet(`${GH}/user`, token);
+  let login: string | null = null;
+  if (who.ok) { try { login = JSON.parse(who.text).login; } catch { /* */ } }
+  const rr: { nome: string; ok: boolean; status: number; privado: boolean | null }[] = [];
+  for (const nome of repos) {
+    const r = await ghGet(`${GH}/repos/${nome}`, token);
+    let privado: boolean | null = null;
+    try { privado = JSON.parse(r.text).private ?? null; } catch { /* */ }
+    rr.push({ nome, ok: r.ok, status: r.status, privado });
+  }
+  return { temToken: true, tokenOk: who.ok, login, repos: rr };
+}
+
 async function setProgresso(db: any, mapaId: string, txt: string) {
   await db.update(s.mapaCapacidade).set({ progresso: txt }).where(eq(s.mapaCapacidade.id, mapaId));
 }

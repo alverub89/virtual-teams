@@ -82,6 +82,17 @@ async function novaVersao(c: any, motivoBase: string) {
   return c.json({ ok: true, versao: mapa.versao });
 }
 
+app.post("/testar-token", async (c) => {
+  const me = c.get("me");
+  if (!me.squadId) return c.json({ error: "sem squad" }, 400);
+  const db = await getDb();
+  const com = await comunidadeDaSquad(db, me.squadId);
+  const { resolveGithubToken, testarToken } = await import("../_lib/capacidades");
+  const token = resolveGithubToken(com);
+  const repos = (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === me.squadId).map((r: any) => r.nome);
+  return c.json(await testarToken(token, repos));
+});
+
 app.post("/gerar", (c) => novaVersao(c, "inicial"));
 
 app.post("/avaliar-impacto", (c) => novaVersao(c, "impacto: reavaliação por novos repositórios"));
