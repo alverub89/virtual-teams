@@ -7,6 +7,7 @@ import Login from "./routes/Login";
 import Convite from "./routes/Convite";
 import Onboarding from "./routes/Onboarding";
 import RequireAuth from "./routes/RequireAuth";
+import AreaGuard from "./routes/AreaGuard";
 import Iniciativas from "./routes/squad/Iniciativas";
 import Assistente from "./routes/squad/Assistente";
 import Lab from "./routes/squad/Lab";
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/popular-demo" element={<PopularDemo />} />
           <Route path="/" element={<Entry />} />
 
+          <Route element={<AreaGuard area="squad" />}>
           <Route
             element={
               <AppShell
@@ -82,7 +84,9 @@ export default function App() {
             <Route path="/squad/kb/:id" element={<KbArtigo />} />
             <Route path="/squad/esteira" element={<Esteira />} />
           </Route>
+          </Route>
 
+          <Route element={<AreaGuard area="console" />}>
           <Route
             element={
               <AppShell
@@ -107,7 +111,9 @@ export default function App() {
             <Route path="/console/playground" element={<Playground />} />
             <Route path="/console/aprovacoes" element={<Aprovacoes />} />
           </Route>
+          </Route>
 
+          <Route element={<AreaGuard area="gestao" />}>
           <Route
             element={
               <AppShell
@@ -121,6 +127,7 @@ export default function App() {
             <Route path="/gestao/features/:id" element={<DocReader base="/gestao/features" />} />
             <Route path="/gestao/comunidade" element={<DocsComunidade />} />
             <Route path="/gestao/comunidade/:id" element={<DocReader base="/gestao/comunidade" />} />
+          </Route>
           </Route>
         </Route>
       </Routes>

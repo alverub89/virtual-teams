@@ -176,6 +176,22 @@ export function AgenteEdit() {
 
   if (!agente) return <p className="muted">Carregando…</p>;
   const editavel = me?.papel === "cto";
+  // Preview do prompt composto EM TEMPO REAL a partir do estado atual do form.
+  const composePreview = () => {
+    const skills = agente.catalogoSkills.filter((sk) => skillIds.includes(sk.id)).map((sk) => `### ${sk.nome}\n${sk.descricao ?? ""}`).join("\n\n");
+    const tools = agente.catalogoTools.filter((t) => toolIds.includes(t.id)).map((t) => `- ${t.nome} (${t.permissao})`).join("\n");
+    const tpls = agente.catalogoTemplates.filter((t) => templateIds.includes(t.id)).map((t) => `### ${t.emoji ?? "📄"} ${t.nome}`).join("\n");
+    const cks = agente.catalogoChecklists.filter((c) => checklistIds.includes(c.id)).map((c) => `### ${c.emoji ?? "✅"} ${c.nome}`).join("\n");
+    const rails = guardRails.split("\n").map((r) => r.trim()).filter(Boolean).map((g) => `- ${g}`).join("\n");
+    return [
+      `Você é ${agente.nome}.`, personalidade,
+      skills && `## Skills\n${skills}`,
+      tools && `## Tools disponíveis\n${tools}`,
+      tpls && `## Templates\n${tpls}`,
+      cks && `## Checklists\n${cks}`,
+      `## Guard-rails (obrigatórios)\n${rails}\n- Nunca faça merge de pull request.\n- Nunca abra GMUD sem checkpoint humano aprovado.\n- Respeite o teto de tokens da execução.`,
+    ].filter(Boolean).join("\n\n");
+  };
   const toggle = (arr: string[], setArr: (v: string[]) => void, val: string) =>
     setArr(arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val]);
 
@@ -276,11 +292,11 @@ export function AgenteEdit() {
           {promptSistema.trim() ? (
             <p className="sub" style={{ marginBottom: 10 }}>override manual — substitui a identidade composta (skills, tools, templates, checklists e guard-rails continuam anexados)</p>
           ) : (
-            <p className="sub" style={{ marginBottom: 10 }}>composição automática — é exatamente o que o modelo recebe. Edite abaixo para personalizar.</p>
+            <p className="sub" style={{ marginBottom: 10 }}>prévia em tempo real — reflete os campos acima conforme você edita. Digite aqui para personalizar (override).</p>
           )}
           <textarea
             className="in" rows={16} disabled={!editavel}
-            value={promptSistema || agente.promptGerado}
+            value={promptSistema || composePreview()}
             onChange={(e) => setPromptSistema(e.target.value)}
             style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5, lineHeight: 1.5 }}
           />
