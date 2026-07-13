@@ -25,6 +25,7 @@ app.get("/", async (c) => {
   const db = await getDb();
   const repos = (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === me.squadId);
   const com = await comunidadeDaSquad(db, me.squadId);
+  const { resolveGithubToken } = await import("../_lib/capacidades");
   const mapas = (await db.select().from(s.mapaCapacidade)).filter((m: any) => m.squadId === me.squadId).sort((a: any, b: any) => b.versao - a.versao);
   const emAnalise = mapas.find((m: any) => m.status === "analisando");
   const atual = mapas.find((m: any) => m.status === "pronto");
@@ -32,7 +33,8 @@ app.get("/", async (c) => {
 
   return c.json({
     podeEditar: podeEditar(me),
-    temToken: !!com?.githubToken,
+    temToken: !!resolveGithubToken(com),
+    tokenViaEnv: !com?.githubToken && !!resolveGithubToken(com),
     repos: repos.map((r: any) => ({ id: r.id, nome: r.nome, linguagem: r.linguagem ?? null, url: r.url ?? null })),
     analisando: emAnalise ? { versao: emAnalise.versao, progresso: emAnalise.progresso, motivo: emAnalise.motivo } : null,
     mapaAtual: atual ? { id: atual.id, versao: atual.versao, motivo: atual.motivo, conteudo: atual.conteudo, impacto: atual.impacto, criadoEm: atual.criadoEm, reposAnalisados: atual.reposAnalisados } : null,

@@ -1,6 +1,12 @@
 import { eq } from "drizzle-orm";
 import { schema as s } from "../../../db/client";
 
+// Token do GitHub: prioriza o salvo na comunidade (via UI); senão, cai para a
+// env var (GITHUB_TOKEN / GITHUB_PAT / GH_TOKEN) configurada na Netlify.
+export function resolveGithubToken(com: any): string | undefined {
+  return com?.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || process.env.GH_TOKEN || undefined;
+}
+
 // Análise de capacidades: planeja e lê os repositórios da squad (profundidade
 // média: estrutura + README + manifest + arquivos-âncora), depois sintetiza com
 // IA a arquitetura de negócio (fluxo de valor → capacidades L1/L2 → repos).
@@ -58,7 +64,7 @@ export async function analisarCapacidades(db: any, mapaId: string): Promise<void
     const [sq] = await db.select().from(s.squad).where(eq(s.squad.id, mapa.squadId));
     const [rt] = sq ? await db.select().from(s.releaseTrain).where(eq(s.releaseTrain.id, sq.releaseTrainId)) : [];
     const [com] = rt ? await db.select().from(s.comunidade).where(eq(s.comunidade.id, rt.comunidadeId)) : [];
-    const token = com?.githubToken ?? undefined;
+    const token = resolveGithubToken(com);
 
     if (!repos.length) throw new Error("a squad não tem repositórios conectados");
 
