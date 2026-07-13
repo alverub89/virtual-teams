@@ -24,6 +24,7 @@ export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", body: JSON.stringify(body ?? {}) });
 export const put = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) });
+export const del = <T>(path: string) => api<T>(path, { method: "DELETE" });
 
 export function useMe() {
   return useQuery<Me, ApiError>({

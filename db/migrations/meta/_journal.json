@@ -22,6 +22,13 @@
       "when": 1783897584453,
       "tag": "0002_cto_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783901233502,
+      "tag": "0003_console_crud",
+      "breakpoints": true
     }
   ]
 }

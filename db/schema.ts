@@ -115,6 +115,8 @@ export const metodo = aiWorkspace.table("metodo", {
   nome: text("nome").notNull(),
   versao: text("versao").notNull(),
   descricao: text("descricao"),
+  escopo: text("escopo").notNull().default("publico"), // publico|comunidade
+  comunidadeId: uuid("comunidade_id"),
   ativo: boolean("ativo").notNull().default(true),
 });
 
@@ -157,8 +159,12 @@ export const conexaoMcp = aiWorkspace.table("conexao_mcp", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
   sistema: text("sistema").notNull(),
-  status: text("status").notNull().default("conectado"), // conectado|erro|desativado
+  status: text("status").notNull().default("configurado"), // configurado|conectado|erro|desativado
   descricao: text("descricao"),
+  url: text("url"),
+  escopo: text("escopo").notNull().default("global"), // global|squad
+  squadId: uuid("squad_id"),
+  comunidadeId: uuid("comunidade_id"),
 });
 
 export const tool = aiWorkspace.table("tool", {

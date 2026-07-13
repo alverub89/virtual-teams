@@ -261,4 +261,308 @@ app.get("/consumo", async (c) => {
   );
 });
 
+/* ==================== CRUD do CTO (setup editável) ==================== */
+
+const cfg = rbac("configurar_plataforma"); // só CTO
+
+/* ---------- Estrutura: comunidades → RTs → squads ---------- */
+
+app.get("/estrutura", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const coms = (await db.select().from(s.comunidade)).filter(
+    (x: any) => x.donoId === me.id || x.id === me.comunidadeId
+  );
+  const comIds = new Set(coms.map((x: any) => x.id));
+  const rts = (await db.select().from(s.releaseTrain)).filter((r: any) => comIds.has(r.comunidadeId));
+  const rtIds = new Set(rts.map((r: any) => r.id));
+  const squads = (await db.select().from(s.squad)).filter((sq: any) => rtIds.has(sq.releaseTrainId));
+  const pessoas = await db.select().from(s.pessoa);
+  return c.json(
+    coms.map((com: any) => ({
+      ...com,
+      releaseTrains: rts
+        .filter((r: any) => r.comunidadeId === com.id)
+        .map((r: any) => ({
+          ...r,
+          squads: squads
+            .filter((sq: any) => sq.releaseTrainId === r.id)
+            .map((sq: any) => ({ ...sq, pessoas: pessoas.filter((p: any) => p.squadId === sq.id).length })),
+        })),
+    }))
+  );
+});
+
+app.post("/comunidades", cfg, async (c) => {
+  const me = c.get("me");
+  const { nome } = await c.req.json<{ nome?: string }>();
+  if (!nome || nome.length < 2) return c.json({ error: "nome inválido" }, 400);
+  const db = await getDb();
+  const [com] = await db.insert(s.comunidade).values({ nome, donoId: me.id }).returning();
+  if (!me.comunidadeId) await db.update(s.pessoa).set({ comunidadeId: com.id }).where(eq(s.pessoa.id, me.id));
+  await audit(me, "criar_comunidade", `comunidade:${nome}`);
+  return c.json(com, 201);
+});
+
+app.post("/release-trains", cfg, async (c) => {
+  const me = c.get("me");
+  const { comunidadeId, nome } = await c.req.json<{ comunidadeId?: string; nome?: string }>();
+  if (!comunidadeId || !nome) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const [rt] = await db.insert(s.releaseTrain).values({ comunidadeId, nome }).returning();
+  await audit(me, "criar_rt", `rt:${nome}`);
+  return c.json(rt, 201);
+});
+
+app.post("/squads", cfg, async (c) => {
+  const me = c.get("me");
+  const { releaseTrainId, nome } = await c.req.json<{ releaseTrainId?: string; nome?: string }>();
+  if (!releaseTrainId || !nome) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const [sq] = await db.insert(s.squad).values({ releaseTrainId, nome, budgetTokensMes: 2_000_000 }).returning();
+  await audit(me, "criar_squad", `squad:${nome}`);
+  return c.json(sq, 201);
+});
+
+const renomear = (tabela: any) => async (c: any) => {
+  const { nome } = await c.req.json();
+  if (!nome || nome.length < 2) return c.json({ error: "nome inválido" }, 400);
+  const db = await getDb();
+  await db.update(tabela).set({ nome }).where(eq(tabela.id, c.req.param("id")));
+  return c.json({ ok: true });
+};
+app.put("/comunidades/:id", cfg, renomear(s.comunidade));
+app.put("/release-trains/:id", cfg, renomear(s.releaseTrain));
+app.put("/squads/:id", cfg, renomear(s.squad));
+
+/* ---------- Blueprints ---------- */
+
+app.post("/blueprints", cfg, async (c) => {
+  const me = c.get("me");
+  const b = await c.req.json<{ nome?: string; descricao?: string; guardRails?: string[] }>();
+  if (!b.nome) return c.json({ error: "nome obrigatório" }, 400);
+  const db = await getDb();
+  const [bp] = await db
+    .insert(s.blueprint)
+    .values({ nome: b.nome, descricao: b.descricao ?? null, guardRails: b.guardRails ?? [] })
+    .returning();
+  await audit(me, "criar_blueprint", `blueprint:${b.nome}`);
+  return c.json(bp, 201);
+});
+
+app.delete("/blueprints/:id", cfg, async (c) => {
+  const db = await getDb();
+  await db.delete(s.blueprint).where(eq(s.blueprint.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
+/* ---------- Skills ---------- */
+
+app.get("/skills", async (c) => {
+  const db = await getDb();
+  const skills = await db.select().from(s.skill).orderBy(asc(s.skill.nome));
+  const links = await db.select().from(s.agenteSkill);
+  return c.json(skills.map((sk: any) => ({ ...sk, agentes: links.filter((l: any) => l.skillId === sk.id).length })));
+});
+
+app.post("/skills", cfg, async (c) => {
+  const me = c.get("me");
+  const b = await c.req.json<{ nome?: string; emoji?: string; descricao?: string; instrucoes?: string }>();
+  if (!b.nome || !b.instrucoes) return c.json({ error: "nome e instruções obrigatórios" }, 400);
+  const db = await getDb();
+  const [sk] = await db
+    .insert(s.skill)
+    .values({ nome: b.nome, emoji: b.emoji ?? "✨", descricao: b.descricao ?? null, instrucoes: b.instrucoes })
+    .returning();
+  await audit(me, "criar_skill", `skill:${b.nome}`);
+  return c.json(sk, 201);
+});
+
+app.put("/skills/:id", cfg, async (c) => {
+  const b = await c.req.json<{ nome?: string; emoji?: string; descricao?: string; instrucoes?: string }>();
+  const db = await getDb();
+  await db
+    .update(s.skill)
+    .set({ nome: b.nome, emoji: b.emoji, descricao: b.descricao, instrucoes: b.instrucoes })
+    .where(eq(s.skill.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
+app.delete("/skills/:id", cfg, async (c) => {
+  const db = await getDb();
+  const id = c.req.param("id");
+  await db.delete(s.agenteSkill).where(eq(s.agenteSkill.skillId, id));
+  await db.delete(s.skill).where(eq(s.skill.id, id));
+  return c.json({ ok: true });
+});
+
+/* ---------- Agentes (criar/remover) ---------- */
+
+app.post("/agentes", cfg, async (c) => {
+  const me = c.get("me");
+  const b = await c.req.json<{ nome?: string; papel?: string; emoji?: string; personalidade?: string; nivelModelo?: string }>();
+  if (!b.nome || !b.personalidade) return c.json({ error: "nome e personalidade obrigatórios" }, 400);
+  const db = await getDb();
+  const [ag] = await db
+    .insert(s.agente)
+    .values({
+      nome: b.nome,
+      papel: b.papel ?? "Agente",
+      emoji: b.emoji ?? "🤖",
+      personalidade: b.personalidade,
+      nivelModelo: b.nivelModelo ?? "intermediario",
+    })
+    .returning();
+  await audit(me, "criar_agente", `agente:${b.nome}`);
+  return c.json(ag, 201);
+});
+
+app.delete("/agentes/:id", cfg, async (c) => {
+  const db = await getDb();
+  const id = c.req.param("id");
+  await db.delete(s.agenteSkill).where(eq(s.agenteSkill.agenteId, id));
+  await db.delete(s.agenteTool).where(eq(s.agenteTool.agenteId, id));
+  await db.delete(s.agente).where(eq(s.agente.id, id));
+  return c.json({ ok: true });
+});
+
+/* ---------- Métodos (criar/editar fases/escopo) ---------- */
+
+app.get("/metodo-templates", (c) =>
+  c.json([
+    { nome: "BMAD Method", fases: [
+      { nome: "Brief", gera: "Brief do problema" }, { nome: "PRD", gera: "PRD com RF/NFR" },
+      { nome: "Arquitetura", gera: "Desenho e ADRs" }, { nome: "Histórias", gera: "Histórias INVEST" },
+      { nome: "Desenvolvimento", gera: "Código e PRs" }, { nome: "Esteira & GMUD", gera: "Evidências e GMUD", checkpoint: true } ] },
+    { nome: "Shape Up", fases: [
+      { nome: "Shaping", gera: "Pitch com apetite e escopo" }, { nome: "Betting", gera: "Aposta do ciclo", checkpoint: true },
+      { nome: "Building", gera: "Escopos entregues" }, { nome: "Cool-down", gera: "Ajustes e aprendizados" } ] },
+    { nome: "Dual-Track (Discovery+Delivery)", fases: [
+      { nome: "Descoberta", gera: "Oportunidade validada" }, { nome: "Definição", gera: "Solução e critérios" },
+      { nome: "Entrega", gera: "Incremento em produção" }, { nome: "Medição", gera: "Impacto medido" } ] },
+    { nome: "Design Sprint", fases: [
+      { nome: "Mapear", gera: "Mapa do problema" }, { nome: "Esboçar", gera: "Soluções" },
+      { nome: "Decidir", gera: "Storyboard", checkpoint: true }, { nome: "Prototipar", gera: "Protótipo" },
+      { nome: "Testar", gera: "Aprendizados com usuários" } ] },
+  ])
+);
+
+const EtapaIn = z.object({ nome: z.string().min(1), agenteId: z.string().uuid().optional().nullable(), gera: z.string().optional(), checkpoint: z.boolean().optional() });
+const MetodoIn = z.object({
+  nome: z.string().min(2),
+  descricao: z.string().optional(),
+  escopo: z.enum(["publico", "comunidade"]).default("publico"),
+  comunidadeId: z.string().uuid().optional().nullable(),
+  etapas: z.array(EtapaIn).min(1),
+});
+
+async function gravarEtapas(db: any, metodoId: string, etapas: z.infer<typeof EtapaIn>[]) {
+  await db.delete(s.metodoEtapa).where(eq(s.metodoEtapa.metodoId, metodoId));
+  await db.insert(s.metodoEtapa).values(
+    etapas.map((e, i) => ({
+      metodoId,
+      ordem: i + 1,
+      nome: e.nome,
+      agenteId: e.agenteId ?? null,
+      tipo: e.checkpoint ? "checkpoint" : "automatica",
+      descricao: e.gera ?? null,
+    }))
+  );
+}
+
+app.post("/metodos", cfg, async (c) => {
+  const me = c.get("me");
+  const body = MetodoIn.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos", detalhe: body.error.flatten() }, 400);
+  const d = body.data;
+  const db = await getDb();
+  const [m] = await db
+    .insert(s.metodo)
+    .values({
+      nome: d.nome,
+      versao: "v1",
+      descricao: d.descricao ?? null,
+      escopo: d.escopo,
+      comunidadeId: d.escopo === "comunidade" ? d.comunidadeId ?? me.comunidadeId : null,
+      ativo: true,
+    })
+    .returning();
+  await gravarEtapas(db, m.id, d.etapas);
+  await audit(me, "criar_metodo", `metodo:${d.nome}`, { escopo: d.escopo });
+  return c.json(m, 201);
+});
+
+app.put("/metodos/:id", cfg, async (c) => {
+  const me = c.get("me");
+  const body = MetodoIn.partial().safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const d = body.data;
+  const db = await getDb();
+  const id = c.req.param("id");
+  const campos: any = {};
+  if (d.nome) campos.nome = d.nome;
+  if (d.descricao !== undefined) campos.descricao = d.descricao;
+  if (d.escopo) { campos.escopo = d.escopo; campos.comunidadeId = d.escopo === "comunidade" ? d.comunidadeId ?? me.comunidadeId : null; }
+  if (Object.keys(campos).length) await db.update(s.metodo).set(campos).where(eq(s.metodo.id, id));
+  if (d.etapas && d.etapas.length) await gravarEtapas(db, id, d.etapas as any);
+  await audit(me, "editar_metodo", `metodo:${id}`);
+  return c.json({ ok: true });
+});
+
+app.delete("/metodos/:id", cfg, async (c) => {
+  const db = await getDb();
+  const id = c.req.param("id");
+  await db.delete(s.metodoEtapa).where(eq(s.metodoEtapa.metodoId, id));
+  await db.delete(s.metodo).where(eq(s.metodo.id, id));
+  return c.json({ ok: true });
+});
+
+/* ---------- MCPs (criar/editar/escopo) ---------- */
+
+const McpIn = z.object({
+  nome: z.string().min(2),
+  sistema: z.string().min(2),
+  descricao: z.string().optional(),
+  url: z.string().optional(),
+  escopo: z.enum(["global", "squad"]).default("global"),
+  squadId: z.string().uuid().optional().nullable(),
+});
+
+app.post("/mcps", cfg, async (c) => {
+  const me = c.get("me");
+  const body = McpIn.safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const d = body.data;
+  const db = await getDb();
+  const [m] = await db
+    .insert(s.conexaoMcp)
+    .values({
+      nome: d.nome,
+      sistema: d.sistema,
+      descricao: d.descricao ?? null,
+      url: d.url ?? null,
+      escopo: d.escopo,
+      squadId: d.escopo === "squad" ? d.squadId ?? null : null,
+      comunidadeId: me.comunidadeId,
+      status: "configurado",
+    })
+    .returning();
+  await audit(me, "criar_mcp", `mcp:${d.nome}`, { escopo: d.escopo });
+  return c.json(m, 201);
+});
+
+app.put("/mcps/:id", cfg, async (c) => {
+  const body = McpIn.partial().safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  await db.update(s.conexaoMcp).set(body.data as any).where(eq(s.conexaoMcp.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
+app.delete("/mcps/:id", cfg, async (c) => {
+  const db = await getDb();
+  await db.delete(s.conexaoMcp).where(eq(s.conexaoMcp.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
 export default app;

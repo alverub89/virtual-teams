@@ -19,6 +19,8 @@ import Esteira from "./routes/squad/Esteira";
 import Comunidade from "./routes/squad/Comunidade";
 import CfgHome from "./routes/console/CfgHome";
 import Convites from "./routes/console/Convites";
+import Estrutura from "./routes/console/Estrutura";
+import Skills from "./routes/console/Skills";
 import Agentes, { AgenteEdit } from "./routes/console/Agentes";
 import { Blueprints, EsteiraConfig, Mcps, Metodos } from "./routes/console/Plataforma";
 import Indicadores from "./routes/gestao/Indicadores";
@@ -72,7 +74,9 @@ export default function App() {
             }
           >
             <Route path="/console" element={<CfgHome />} />
+            <Route path="/console/estrutura" element={<Estrutura />} />
             <Route path="/console/convites" element={<Convites />} />
+            <Route path="/console/skills" element={<Skills />} />
             <Route path="/console/arquitetura" element={<Blueprints />} />
             <Route path="/console/esteira" element={<EsteiraConfig />} />
             <Route path="/console/metodos" element={<Metodos />} />

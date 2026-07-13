@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, put, useMe } from "../../lib/api";
-import { Button, Chip, PageHead } from "../../components/ui";
+import { api, post, put, useMe } from "../../lib/api";
+import { Button, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
 interface AgenteResumo {
@@ -19,9 +19,29 @@ interface AgenteResumo {
 
 export default function Agentes() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const qc = useQueryClient();
   const { data: agentes } = useQuery<AgenteResumo[]>({
     queryKey: ["agentes"],
     queryFn: () => api("/console/agentes"),
+  });
+
+  const [aberto, setAberto] = useState(false);
+  const [nome, setNome] = useState("");
+  const [papel, setPapel] = useState("");
+  const [emoji, setEmoji] = useState("🤖");
+  const [personalidade, setPersonalidade] = useState("");
+  const [nivelModelo, setNivelModelo] = useState("intermediario");
+
+  const criar = useMutation({
+    mutationFn: () => post<{ id: string }>("/console/agentes", { nome, papel, emoji, personalidade, nivelModelo }),
+    onSuccess: (a) => {
+      qc.invalidateQueries({ queryKey: ["agentes"] });
+      setAberto(false);
+      toast("🤖 Agente criado — configure skills e tools");
+      navigate(`/console/agentes/${a.id}`);
+    },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
   return (
@@ -29,7 +49,33 @@ export default function Agentes() {
       <PageHead
         title="Agentes, Skills & Tools"
         description="O catálogo de agentes da plataforma: personalidade, skills que sabem executar e tools que podem usar — com permissão explícita."
+        actions={
+          <>
+            <Link to="/console/skills" className="btn" style={{ textDecoration: "none" }}>Skills</Link>
+            <Button variant="primary" onClick={() => setAberto(true)}>+ Novo agente</Button>
+          </>
+        }
       />
+      {aberto && (
+        <Modal title="Novo agente" subtitle="Depois você atribui skills e tools ao agente." onClose={() => setAberto(false)}
+          foot={<><Button onClick={() => setAberto(false)}>Cancelar</Button><Button variant="primary" onClick={() => nome.length >= 2 && personalidade.length >= 10 && criar.mutate()}>{criar.isPending ? "Criando…" : "Criar agente"}</Button></>}>
+          <div className="fld-row">
+            <Fld label="Nome"><input className="in" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Agente Analista" /></Fld>
+            <Fld label="Emoji"><input className="in" value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} /></Fld>
+          </div>
+          <div className="fld-row">
+            <Fld label="Papel curto"><input className="in" value={papel} onChange={(e) => setPapel(e.target.value)} placeholder="Ex.: PRD e priorização" /></Fld>
+            <Fld label="Nível de modelo">
+              <select className="in" value={nivelModelo} onChange={(e) => setNivelModelo(e.target.value)}>
+                <option value="avancado">avançado</option>
+                <option value="intermediario">intermediário</option>
+                <option value="leve">leve</option>
+              </select>
+            </Fld>
+          </div>
+          <Fld label="Personalidade"><textarea className="in" rows={3} value={personalidade} onChange={(e) => setPersonalidade(e.target.value)} placeholder="Como o agente pensa e age…" /></Fld>
+        </Modal>
+      )}
       <div className="grid g3">
         {agentes?.map((a) => (
           <div key={a.id} className="agent-card" onClick={() => navigate(`/console/agentes/${a.id}`)}>

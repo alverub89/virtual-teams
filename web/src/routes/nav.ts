@@ -101,6 +101,13 @@ export const CONSOLE_NAV: NavSection[] = [
         fase: "Fase 2",
       },
       {
+        path: "/console/estrutura",
+        label: "Estrutura",
+        title: "Estrutura",
+        description: "Comunidades, release trains e squads.",
+        fase: "Fase 2",
+      },
+      {
         path: "/console/convites",
         label: "Convites",
         title: "Convites",
@@ -133,6 +140,13 @@ export const CONSOLE_NAV: NavSection[] = [
         label: "Agentes & Skills",
         title: "Agentes, Skills & Tools",
         description: "Catálogo de agentes, skills e tools com permissões.",
+        fase: "Fase 2",
+      },
+      {
+        path: "/console/skills",
+        label: "Skills",
+        title: "Skills",
+        description: "Habilidades editáveis usadas pelos agentes.",
         fase: "Fase 2",
       },
       {
