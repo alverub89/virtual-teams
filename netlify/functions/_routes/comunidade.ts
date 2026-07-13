@@ -27,6 +27,7 @@ app.get("/", async (c) => {
   const squadById = new Map<string, any>(squads.map((sq: any) => [sq.id, sq]));
   const pessoas = (await db.select().from(s.pessoa)).filter((p: any) => p.comunidadeId === comId && p.ativo);
   const convites = (await db.select().from(s.convite)).filter((v: any) => v.comunidadeId === comId && v.status === "pendente");
+  const repos = me.squadId ? (await db.select().from(s.repositorio)).filter((r: any) => r.squadId === me.squadId) : [];
 
   const pessoaDto = (p: any) => ({
     id: p.id, nome: p.nome, email: p.email, papel: p.papel,
@@ -36,10 +37,14 @@ app.get("/", async (c) => {
   });
   const papeisConvidaveis = papeisQuePodeConvidar(me.papel);
 
+  const podeEditar = me.papel === "pm" || me.papel === "tech_lead" || me.papel === "cto";
   return c.json({
     comunidade: com ? { id: com.id, nome: com.nome } : null,
     podeConvidar: papeisConvidaveis.length > 0,
     papeisConvidaveis,
+    minhaSquadNome: me.squadId ? squadById.get(me.squadId)?.nome ?? null : null,
+    podeEditarRepos: podeEditar && !!me.squadId,
+    repos: repos.map((r: any) => ({ id: r.id, nome: r.nome, linguagem: r.linguagem ?? null, url: r.url ?? null })),
     squads: squads.map((sq: any) => ({ id: sq.id, nome: sq.nome })),
     releaseTrains: rts.map((rt: any) => ({
       id: rt.id, nome: rt.nome,

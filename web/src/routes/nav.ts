@@ -30,17 +30,17 @@ export const SQUAD_NAV: NavSection[] = [
     label: "Squad",
     items: [
       {
+        path: "/squad/capacidades",
+        label: "Capacidades",
+        title: "Mapa de capacidades",
+        description: "Arquitetura de negócio da squad (capacidades × fluxo de valor) sobre os repositórios.",
+        fase: "Fase 1",
+      },
+      {
         path: "/squad/iniciativas",
         label: "Iniciativas",
         title: "Iniciativas da squad",
         description: "Features em andamento e sua jornada — do brief à GMUD.",
-        fase: "Fase 1",
-      },
-      {
-        path: "/squad/time",
-        label: "Time & Squad",
-        title: "Time & Squad",
-        description: "Membros, convites e repositórios da sua squad.",
         fase: "Fase 1",
       },
       {
@@ -70,13 +70,6 @@ export const SQUAD_NAV: NavSection[] = [
         title: "Execução autônoma",
         description: "Squad virtual com humano no loop — runs, passos e checkpoints.",
         fase: "Fase 4",
-      },
-      {
-        path: "/squad/capacidades",
-        label: "Capacidades",
-        title: "Capacidades",
-        description: "Capacidades do negócio e repositórios GitHub conectados.",
-        fase: "Fase 1",
       },
       {
         path: "/squad/dev",

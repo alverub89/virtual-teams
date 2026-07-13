@@ -8,7 +8,6 @@ import Convite from "./routes/Convite";
 import Onboarding from "./routes/Onboarding";
 import RequireAuth from "./routes/RequireAuth";
 import Iniciativas from "./routes/squad/Iniciativas";
-import Time from "./routes/squad/Time";
 import Assistente from "./routes/squad/Assistente";
 import Lab from "./routes/squad/Lab";
 import Jornada from "./routes/squad/Jornada";
@@ -63,7 +62,6 @@ export default function App() {
             <Route path="/comunidade" element={<Comunidade />} />
             <Route path="/squad/iniciativas" element={<Iniciativas />} />
             <Route path="/squad/iniciativas/:codigo" element={<Jornada />} />
-            <Route path="/squad/time" element={<Time />} />
             <Route path="/squad/assistente" element={<Assistente />} />
             <Route path="/squad/lab" element={<Lab />} />
             <Route path="/squad/okrs" element={<Okrs />} />

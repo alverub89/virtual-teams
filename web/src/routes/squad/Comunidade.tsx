@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, post } from "../../lib/api";
+import { api, del, post } from "../../lib/api";
 import { Button, Card, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 import { PAPEL_LABEL, type Papel } from "../../../../shared/types";
@@ -8,10 +8,14 @@ import { PAPEL_LABEL, type Papel } from "../../../../shared/types";
 interface Pessoa { id: string; nome: string; email: string; papel: string; papelLabel: string; squadNome: string | null; ehVoce: boolean }
 interface Convite { id: string; email: string; papel: string; papelLabel: string; squadNome: string | null }
 interface RT { id: string; nome: string; squads: { id: string; nome: string; pessoas: number; minha: boolean }[] }
+interface Repo { id: string; nome: string; linguagem: string | null; url: string | null }
 interface Dados {
   comunidade: { id: string; nome: string } | null;
   podeConvidar: boolean;
   papeisConvidaveis: Papel[];
+  minhaSquadNome: string | null;
+  podeEditarRepos: boolean;
+  repos: Repo[];
   squads: { id: string; nome: string }[];
   releaseTrains: RT[];
   lideranca: Pessoa[];
@@ -28,6 +32,23 @@ export default function Comunidade() {
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState<Papel>("dev");
   const [squadId, setSquadId] = useState("");
+
+  const [repoModal, setRepoModal] = useState(false);
+  const [reposText, setReposText] = useState("");
+  const addRepos = useMutation({
+    mutationFn: () => {
+      const repos = reposText.split("\n").map((l) => l.trim()).filter((l) => l.includes("/")).map((nome) => ({ nome }));
+      if (!repos.length) throw new Error("informe ao menos um repo no formato org/repo");
+      return post<{ criados: number }>("/time/repos", { repos });
+    },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["comunidade"] }); setRepoModal(false); setReposText(""); toast(`🔗 ${r.criados} repositório(s) conectado(s)`); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const removerRepo = useMutation({
+    mutationFn: (id: string) => del(`/time/repos/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["comunidade"] }); toast("🗑️ Repositório removido"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   const abrir = (tipo: "membro" | "lideranca") => {
     setAberto(tipo);
@@ -100,6 +121,25 @@ export default function Comunidade() {
         </Card>
       </div>
 
+      {data.minhaSquadNome && (
+        <>
+          <div className="sec-title" style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>Repositórios · {data.minhaSquadNome}</span>
+            {data.podeEditarRepos && <button className="btn" style={{ padding: "2px 10px" }} onClick={() => setRepoModal(true)}>+ Conectar</button>}
+          </div>
+          <Card pad>
+            {data.repos.length === 0 && <p className="empty-note">Nenhum repositório conectado à sua squad.</p>}
+            {data.repos.map((r) => (
+              <div key={r.id} className="tool-pick" style={{ cursor: "default" }}>
+                <div style={{ flex: 1 }}><div className="tp-name">{r.nome}</div>{r.url && <a className="tp-src" href={r.url} target="_blank" rel="noreferrer">{r.url}</a>}</div>
+                {r.linguagem && <span className="pill">{r.linguagem}</span>}
+                {data.podeEditarRepos && <button className="modal-x" title="Remover" onClick={() => confirm(`Remover ${r.nome}?`) && removerRepo.mutate(r.id)}>✕</button>}
+              </div>
+            ))}
+          </Card>
+        </>
+      )}
+
       {data.convites.length > 0 && (
         <>
           <div className="sec-title" style={{ marginTop: 14 }}>Convites pendentes</div>
@@ -137,6 +177,15 @@ export default function Comunidade() {
               </Fld>
             )}
           </div>
+        </Modal>
+      )}
+
+      {repoModal && (
+        <Modal title="Conectar repositórios" subtitle="Um por linha, no formato org/repo. Pode colar vários." onClose={() => setRepoModal(false)}
+          foot={<><Button onClick={() => setRepoModal(false)}>Cancelar</Button><Button variant="primary" onClick={() => addRepos.mutate()}>{addRepos.isPending ? "Conectando…" : "Conectar"}</Button></>}>
+          <Fld label="Repositórios (org/repo por linha)">
+            <textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"itau/pix-cobranca\nitau/pix-core\nitau/consent-service"} />
+          </Fld>
         </Modal>
       )}
     </>
