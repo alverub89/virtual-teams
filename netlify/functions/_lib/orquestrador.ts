@@ -14,6 +14,9 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
   try {
     let ordem = 0;
     for (let guarda = 0; guarda < 30; guarda++) {
+      // Respeita cancelamento humano: se o status saiu de "em_andamento", para.
+      const [atual] = await db.select().from(s.execucaoAutonoma).where(eq(s.execucaoAutonoma.id, execId));
+      if (!atual || atual.status !== "em_andamento") return;
       const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.id, exec.iniciativaId));
       if (!ini || ini.status === "concluida") break;
 

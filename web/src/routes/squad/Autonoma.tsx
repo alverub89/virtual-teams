@@ -15,6 +15,7 @@ interface Run {
   iniciativaCodigo: string | null;
   modo?: string;
   progresso?: string | null;
+  totalEtapas?: number | null;
   criadoEm: string;
 }
 interface Elegivel { id: string; codigo: string; titulo: string; etapaAtual: number; etapasTotal: number }
@@ -43,6 +44,7 @@ const STATUS_LABEL: Record<string, { label: string; tone: "blue" | "good" | "war
   aguardando_aprovacao: { label: "Aguardando sua decisão", tone: "warn" },
   pausada: { label: "Pausada", tone: "neutral" },
   rejeitada: { label: "Rejeitada", tone: "crit" },
+  cancelada: { label: "Cancelada", tone: "neutral" },
   concluida: { label: "Concluída", tone: "good" },
 };
 
@@ -84,6 +86,16 @@ export default function Autonoma() {
       setOrqAberto(false); setIniSel(""); setSelId(r.id);
       toast("🎭 Orquestrador iniciado — vai conduzir a iniciativa até concluir");
     },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const cancelarRun = useMutation({
+    mutationFn: (id: string) => post(`/runs/${id}/cancelar`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["runs"] }); qc.invalidateQueries({ queryKey: ["run", selId] }); toast("🛑 Orquestração cancelada"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const retomarRun = useMutation({
+    mutationFn: (id: string) => post(`/runs/${id}/retomar`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["runs"] }); qc.invalidateQueries({ queryKey: ["run", selId] }); toast("▶ Retomando a orquestração"); },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
@@ -167,12 +179,29 @@ export default function Autonoma() {
                   ? `Orquestração da iniciativa ${run.iniciativaCodigo ?? ""} — o agente conduz o fluxo inteiro`
                   : `${run.krDescricao ? `KR alvo: ${run.krDescricao} · ` : ""}consumo ${Math.round(run.tokensGastos / 1000)}k / teto ${Math.round(run.tetoTokens / 1000)}k tokens`}
               </p>
-              {run.modo === "iniciativa" && run.status === "em_andamento" && (
-                <div className="card" style={{ marginBottom: 12 }}>⏳ {run.progresso ?? "Conduzindo as etapas…"}</div>
-              )}
-              {run.modo === "iniciativa" && run.status === "concluida" && (
-                <div className="card" style={{ marginBottom: 12 }}>✅ Iniciativa concluída pelo orquestrador. Documentos disponíveis em Documentação.</div>
-              )}
+              {run.modo === "iniciativa" && (() => {
+                const total = run.totalEtapas ?? 0;
+                const feitos = run.passos.filter((p) => p.status === "concluido").length;
+                const pct = total ? Math.round((feitos / total) * 100) : 0;
+                return (
+                  <div className="card" style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      <span className="sub">{total ? `${feitos}/${total} etapas · ${pct}%` : "orquestração"}</span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {run.status === "em_andamento" && <button className="btn" onClick={() => cancelarRun.mutate(run.id)}>🛑 Cancelar</button>}
+                        {(run.status === "cancelada" || run.status === "rejeitada") && <button className="btn primary" onClick={() => retomarRun.mutate(run.id)}>▶ Tentar novamente</button>}
+                      </div>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 5, background: "rgba(127,127,127,.2)", overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: run.status === "concluida" ? "#16a34a" : "var(--accent, #2563eb)", transition: "width .4s" }} />
+                    </div>
+                    {run.status === "em_andamento" && <p className="sub" style={{ margin: "8px 0 0" }}>⏳ {run.progresso ?? "Conduzindo as etapas…"}</p>}
+                    {run.status === "concluida" && <p className="sub" style={{ margin: "8px 0 0" }}>✅ Concluída — documentos em Documentação.</p>}
+                    {run.status === "cancelada" && <p className="sub" style={{ margin: "8px 0 0" }}>🛑 Cancelada. Você pode tentar novamente do ponto em que parou.</p>}
+                    {run.status === "rejeitada" && <p className="sub" style={{ margin: "8px 0 0" }}>⚠️ {run.progresso ?? "Falhou."} Você pode tentar novamente.</p>}
+                  </div>
+                );
+              })()}
               <div className="run">
                 {run.passos.map((p) => {
                   const ck = run.checkpoints.find((k) => k.passoOrdem === p.ordem && k.status === "aberto");

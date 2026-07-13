@@ -109,13 +109,42 @@ app.get("/:id", async (c) => {
     .where(eq(s.execucaoCheckpoint.execucaoId, run.id));
   const krs = await db.select().from(s.keyResult);
   const [ini] = run.iniciativaId ? await db.select().from(s.iniciativa).where(eq(s.iniciativa.id, run.iniciativaId)) : [null];
+  const totalEtapas = ini ? (await db.select().from(s.iniciativaEtapa)).filter((e: any) => e.iniciativaId === ini.id).length : null;
   return c.json({
     ...run,
     krDescricao: krs.find((k: any) => k.id === run.krId)?.descricao ?? null,
     iniciativaCodigo: ini?.codigo ?? null,
+    totalEtapas,
     passos,
     checkpoints,
   });
+});
+
+/* Cancelar a orquestração de uma iniciativa (o loop de background respeita). */
+app.post("/:id/cancelar", rbac("iniciar_run"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [run] = await db.select().from(s.execucaoAutonoma).where(eq(s.execucaoAutonoma.id, c.req.param("id")));
+  if (!run || run.squadId !== me.squadId) return c.json({ error: "run não encontrado" }, 404);
+  if (run.status !== "em_andamento") return c.json({ error: "run não está em andamento" }, 409);
+  await db.update(s.execucaoAutonoma).set({ status: "cancelada", progresso: "cancelada pelo usuário", atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, run.id));
+  await audit(me, "cancelar_run", `run:${run.id}`);
+  return c.json({ ok: true });
+});
+
+/* Retomar/tentar novamente a orquestração de uma iniciativa. */
+app.post("/:id/retomar", rbac("iniciar_run"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [run] = await db.select().from(s.execucaoAutonoma).where(eq(s.execucaoAutonoma.id, c.req.param("id")));
+  if (!run || run.squadId !== me.squadId) return c.json({ error: "run não encontrado" }, 404);
+  if (run.modo !== "iniciativa") return c.json({ error: "apenas orquestração de iniciativa" }, 400);
+  if (run.status === "em_andamento" || run.status === "concluida") return c.json({ error: `run já ${run.status}` }, 409);
+  await db.update(s.execucaoAutonoma).set({ status: "em_andamento", progresso: "retomando…", atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, run.id));
+  const { enqueueOrquestrar } = await import("../_lib/orquestrador");
+  await enqueueOrquestrar(run.id);
+  await audit(me, "retomar_run", `run:${run.id}`);
+  return c.json({ ok: true });
 });
 
 const Decisao = z.object({
