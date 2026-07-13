@@ -6,17 +6,33 @@ import { audit } from "../_lib/audit";
 
 const app = new Hono();
 
-/* Lista documentos visíveis: da squad + escopos superiores (consulta). */
+/* Documentos visíveis por escopo: os da squad; os de RT (todas as squads do
+   meu RT); os de comunidade (todas as squads da comunidade). Com iniciativa. */
 app.get("/", async (c) => {
   const me = c.get("me");
   const escopo = c.req.query("escopo"); // squad|release_train|comunidade
-  const squadId = c.req.query("squadId");
   const db = await getDb();
-  let docs = (await db.select().from(s.documento).orderBy(desc(s.documento.criadoEm))).filter(
-    (d: any) => d.squadId === (squadId ?? me.squadId)
-  );
+
+  const squads = await db.select().from(s.squad);
+  const rts = await db.select().from(s.releaseTrain);
+  const rtDeSquad = new Map<string, string>(squads.map((sq: any) => [sq.id, sq.releaseTrainId]));
+  const comDeRt = new Map<string, string>(rts.map((rt: any) => [rt.id, rt.comunidadeId]));
+  const comDeSquad = (sid: string | null) => { const rt = sid ? rtDeSquad.get(sid) : undefined; return rt ? comDeRt.get(rt) : undefined; };
+  const meuRt = me.squadId ? rtDeSquad.get(me.squadId) : undefined;
+
+  const visivel = (d: any) => {
+    if (d.escopo === "comunidade") return comDeSquad(d.squadId) === me.comunidadeId;
+    if (d.escopo === "release_train") return d.squadId && rtDeSquad.get(d.squadId) === meuRt;
+    return d.squadId === me.squadId; // squad
+  };
+
+  const inis = await db.select().from(s.iniciativa);
+  let docs = (await db.select().from(s.documento).orderBy(desc(s.documento.criadoEm))).filter(visivel);
   if (escopo) docs = docs.filter((d: any) => d.escopo === escopo);
-  return c.json(docs.map(({ conteudo, ...resto }: any) => resto));
+  return c.json(docs.map(({ conteudo, ...r }: any) => {
+    const ini = r.iniciativaId ? inis.find((i: any) => i.id === r.iniciativaId) : null;
+    return { ...r, iniciativaCodigo: ini?.codigo ?? null, iniciativaTitulo: ini?.titulo ?? null, squadNome: squads.find((sq: any) => sq.id === r.squadId)?.nome ?? null };
+  }));
 });
 
 app.get("/:id", async (c) => {

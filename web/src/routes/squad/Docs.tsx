@@ -13,15 +13,26 @@ export interface DocMeta {
   autorNome: string;
   escopo: string;
   criadoEm: string;
+  iniciativaId?: string | null;
+  iniciativaCodigo?: string | null;
+  iniciativaTitulo?: string | null;
+  squadNome?: string | null;
 }
 
 const TIPOS = [
-  { key: "", label: "Todos" },
+  { key: "", label: "Todos os tipos" },
   { key: "prd", label: "PRDs" },
   { key: "adr", label: "ADRs" },
+  { key: "sdd", label: "SDDs" },
   { key: "api", label: "APIs" },
   { key: "guia", label: "Guias" },
   { key: "postmortem", label: "Post-mortems" },
+];
+const ESCOPOS = [
+  { key: "", label: "Todos os escopos" },
+  { key: "squad", label: "Squad" },
+  { key: "release_train", label: "Release Train" },
+  { key: "comunidade", label: "Comunidade" },
 ];
 
 export function DocGrid({ docs, base }: { docs: DocMeta[] | undefined; base: string }) {
@@ -50,32 +61,57 @@ export function DocGrid({ docs, base }: { docs: DocMeta[] | undefined; base: str
 export default function Docs() {
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState("");
-  const { data: docs } = useQuery<DocMeta[]>({ queryKey: ["docs"], queryFn: () => api("/docs") });
+  const [escopo, setEscopo] = useState("");
+  const { data: docs } = useQuery<DocMeta[]>({ queryKey: ["docs", escopo], queryFn: () => api(`/docs${escopo ? `?escopo=${escopo}` : ""}`) });
 
   const filtrados = docs?.filter(
     (d) =>
       (!tipo || d.tipo === tipo) &&
       (!busca || `${d.titulo} ${d.resumo}`.toLowerCase().includes(busca.toLowerCase()))
-  );
+  ) ?? [];
+
+  // Agrupa por iniciativa; docs sem iniciativa ficam em "Documentos da squad".
+  const grupos = new Map<string, { titulo: string; docs: DocMeta[] }>();
+  for (const d of filtrados) {
+    const chave = d.iniciativaId ?? "_avulsos";
+    const titulo = d.iniciativaId ? `${d.iniciativaCodigo ?? "Iniciativa"} — ${d.iniciativaTitulo ?? ""}` : "Documentos da squad";
+    if (!grupos.has(chave)) grupos.set(chave, { titulo, docs: [] });
+    grupos.get(chave)!.docs.push(d);
+  }
+  const ordenados = [...grupos.entries()].sort((a, b) => (a[0] === "_avulsos" ? 1 : b[0] === "_avulsos" ? -1 : a[1].titulo.localeCompare(b[1].titulo)));
 
   return (
     <>
       <PageHead
         title="Documentação"
-        description="Documentos da squad — gerados pelos agentes na jornada e escritos por pessoas. Escopos superiores aparecem para consulta."
+        description="Organizada por iniciativa e escopo. O que é de squad fica na squad; RT aparece para o Release Train; comunidade para todos."
       />
       <div className="doc-toolbar">
         <div className="doc-search">
           🔎 <input placeholder="Buscar documento…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
+        {ESCOPOS.map((e) => (
+          <button key={e.key} className={`filter-chip ${escopo === e.key ? "active" : ""}`} onClick={() => setEscopo(e.key)}>
+            {e.label}
+          </button>
+        ))}
+        <span style={{ width: 1, background: "rgba(127,127,127,.25)", alignSelf: "stretch" }} />
         {TIPOS.map((t) => (
           <button key={t.key} className={`filter-chip ${tipo === t.key ? "active" : ""}`} onClick={() => setTipo(t.key)}>
             {t.label}
           </button>
         ))}
       </div>
-      <DocGrid docs={filtrados} base="/squad/docs" />
-      {filtrados?.length === 0 && <p className="empty-note">Nada encontrado.</p>}
+      {ordenados.map(([chave, g]) => (
+        <div key={chave} style={{ marginBottom: 22 }}>
+          <h3 style={{ margin: "0 0 10px", display: "flex", gap: 8, alignItems: "center" }}>
+            {chave === "_avulsos" ? "📁" : "🚀"} {g.titulo}
+            <span className="sub" style={{ fontSize: 12.5, fontWeight: 400 }}>({g.docs.length})</span>
+          </h3>
+          <DocGrid docs={g.docs} base="/squad/docs" />
+        </div>
+      ))}
+      {filtrados.length === 0 && <p className="empty-note">Nada encontrado.</p>}
     </>
   );
 }
