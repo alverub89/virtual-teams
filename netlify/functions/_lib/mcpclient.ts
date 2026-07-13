@@ -16,12 +16,13 @@ interface RpcResult {
   raw: string;
 }
 
-async function postRpc(url: string, body: any, sessionId?: string | null): Promise<RpcResult> {
+async function postRpc(url: string, body: any, sessionId?: string | null, token?: string): Promise<RpcResult> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
   };
   if (sessionId) headers["mcp-session-id"] = sessionId;
+  if (token) headers["authorization"] = `Bearer ${token}`;
   const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   const sid = res.headers.get("mcp-session-id") ?? sessionId ?? null;
   const ct = res.headers.get("content-type") ?? "";
@@ -43,27 +44,28 @@ async function postRpc(url: string, body: any, sessionId?: string | null): Promi
   return { ok: res.ok, status: res.status, json, sid, raw };
 }
 
-async function initialize(url: string): Promise<RpcResult> {
+async function initialize(url: string, token?: string): Promise<RpcResult> {
   const r = await postRpc(url, {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
     params: { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: "AI Workspace", version: "1.0.0" } },
-  });
+  }, null, token);
   // Notificação de "initialized" (best-effort; muitos servidores exigem).
-  if (r.ok) await postRpc(url, { jsonrpc: "2.0", method: "notifications/initialized" }, r.sid).catch(() => {});
+  if (r.ok) await postRpc(url, { jsonrpc: "2.0", method: "notifications/initialized" }, r.sid, token).catch(() => {});
   return r;
 }
 
 const erro = (r: RpcResult) => r.json?.error?.message ?? `HTTP ${r.status}` + (r.raw ? ` — ${r.raw.slice(0, 200)}` : "");
 
 export async function listarToolsRemoto(
-  url: string
+  url: string,
+  token?: string
 ): Promise<{ ok: boolean; serverInfo?: any; tools?: any[]; erro?: string }> {
   try {
-    const init = await initialize(url);
+    const init = await initialize(url, token);
     if (!init.ok || init.json?.error) return { ok: false, erro: erro(init) };
-    const r = await postRpc(url, { jsonrpc: "2.0", id: 2, method: "tools/list" }, init.sid);
+    const r = await postRpc(url, { jsonrpc: "2.0", id: 2, method: "tools/list" }, init.sid, token);
     if (!r.ok || r.json?.error) return { ok: false, erro: erro(r) };
     return { ok: true, serverInfo: init.json?.result?.serverInfo, tools: r.json?.result?.tools ?? [] };
   } catch (e) {
@@ -74,12 +76,13 @@ export async function listarToolsRemoto(
 export async function chamarToolRemoto(
   url: string,
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  token?: string
 ): Promise<{ ok: boolean; resultado?: unknown; isError?: boolean; erro?: string }> {
   try {
-    const init = await initialize(url);
+    const init = await initialize(url, token);
     if (!init.ok || init.json?.error) return { ok: false, erro: erro(init) };
-    const r = await postRpc(url, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name, arguments: args ?? {} } }, init.sid);
+    const r = await postRpc(url, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name, arguments: args ?? {} } }, init.sid, token);
     if (!r.ok || r.json?.error) return { ok: false, erro: erro(r) };
     const content = r.json?.result?.content ?? [];
     const texto = Array.isArray(content)

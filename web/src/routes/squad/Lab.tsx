@@ -27,7 +27,8 @@ export default function Lab() {
   const [tUrl, setTUrl] = useState(""); const [tMetodo, setTMetodo] = useState("GET");
 
   const [novoMcp, setNovoMcp] = useState(false);
-  const [mNome, setMNome] = useState(""); const [mSis, setMSis] = useState(""); const [mDesc, setMDesc] = useState(""); const [mUrl, setMUrl] = useState(""); const [mEscopo, setMEscopo] = useState("squad");
+  const [mNome, setMNome] = useState(""); const [mSis, setMSis] = useState(""); const [mDesc, setMDesc] = useState(""); const [mUrl, setMUrl] = useState(""); const [mEscopo, setMEscopo] = useState("squad"); const [mToken, setMToken] = useState("");
+  const presetNetlify = () => { setMNome("Netlify"); setMSis("netlify"); setMDesc("Deploy, sites e ambientes na Netlify (MCP oficial)"); setMUrl("https://netlify-mcp.netlify.app/mcp"); setMEscopo("comunidade"); };
 
   const criarTool = useMutation({
     mutationFn: () => post("/lab/tools", {
@@ -38,8 +39,8 @@ export default function Lab() {
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
   const criarMcp = useMutation({
-    mutationFn: () => post("/lab/mcps", { nome: mNome, sistema: mSis, descricao: mDesc, url: mUrl || undefined, escopo: mEscopo }),
-    onSuccess: () => { invalidar(); setNovoMcp(false); setMNome(""); setMSis(""); setMDesc(""); setMUrl(""); toast("🔌 MCP criado (rascunho)"); },
+    mutationFn: () => post("/lab/mcps", { nome: mNome, sistema: mSis, descricao: mDesc, url: mUrl || undefined, token: mToken || undefined, escopo: mEscopo }),
+    onSuccess: () => { invalidar(); setNovoMcp(false); setMNome(""); setMSis(""); setMDesc(""); setMUrl(""); setMToken(""); toast("🔌 MCP criado (rascunho)"); },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
   const publicarTool = useMutation({ mutationFn: (id: string) => post(`/lab/tools/${id}/publicar`), onSuccess: () => { invalidar(); toast("📤 Enviado para aprovação do CTO"); }, onError: (e) => toast(`⚠️ ${(e as Error).message}`) });
@@ -126,12 +127,14 @@ export default function Lab() {
       {novoMcp && (
         <Modal title="Novo MCP" subtitle="Registre um MCP (inclusive remoto). Fica como rascunho até publicar." onClose={() => setNovoMcp(false)}
           foot={<><Button onClick={() => setNovoMcp(false)}>Cancelar</Button><Button variant="primary" onClick={() => mNome.length >= 2 && mSis.length >= 2 && criarMcp.mutate()}>{criarMcp.isPending ? "…" : "Criar"}</Button></>}>
+          <div style={{ marginBottom: 10 }}><Button onClick={presetNetlify}>⚡ Preencher com o MCP da Netlify</Button></div>
           <div className="fld-row">
             <Fld label="Nome"><input className="in" value={mNome} onChange={(e) => setMNome(e.target.value)} placeholder="Netlify" /></Fld>
             <Fld label="Sistema"><input className="in" value={mSis} onChange={(e) => setMSis(e.target.value)} placeholder="netlify" /></Fld>
           </div>
           <Fld label="Descrição"><input className="in" value={mDesc} onChange={(e) => setMDesc(e.target.value)} /></Fld>
-          <Fld label="URL do servidor MCP (opcional, remoto)"><input className="in" value={mUrl} onChange={(e) => setMUrl(e.target.value)} placeholder="https://mcp.exemplo.com/mcp" /></Fld>
+          <Fld label="URL do servidor MCP (remoto)"><input className="in" value={mUrl} onChange={(e) => setMUrl(e.target.value)} placeholder="https://netlify-mcp.netlify.app/mcp" /></Fld>
+          <Fld label="Token de acesso (opcional — ex.: PAT da Netlify)"><input className="in" type="password" value={mToken} onChange={(e) => setMToken(e.target.value)} placeholder="nfp_..." /></Fld>
           <Fld label="Abrangência sugerida"><select className="in" value={mEscopo} onChange={(e) => setMEscopo(e.target.value)}><option value="squad">Só a minha squad</option><option value="comunidade">Toda a comunidade (CTO decide)</option></select></Fld>
         </Modal>
       )}

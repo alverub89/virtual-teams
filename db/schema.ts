@@ -173,6 +173,7 @@ export const conexaoMcp = aiWorkspace.table("conexao_mcp", {
   criadoPor: uuid("criado_por"),
   submetidoEm: timestamp("submetido_em", { withTimezone: true }),
   motivoRejeicao: text("motivo_rejeicao"),
+  token: text("token"), // credencial p/ conectar a um MCP remoto (ex.: PAT da Netlify) — enviada como Bearer
 });
 
 export const tool = aiWorkspace.table("tool", {

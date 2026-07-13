@@ -21,7 +21,7 @@ app.get("/", async (c) => {
     podeCriar: podeCriar(me),
     squadId: me.squadId,
     tools: tools.map((t: any) => ({ ...t })),
-    mcps: mcps.map((m: any) => ({ ...m, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null })),
+    mcps: mcps.map(({ token, ...m }: any) => ({ ...m, temToken: !!token, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null })),
   });
 });
 
@@ -56,6 +56,7 @@ const McpIn = z.object({
   sistema: z.string().min(2),
   descricao: z.string().optional(),
   url: z.string().url().optional(),
+  token: z.string().optional(), // credencial p/ MCP remoto (ex.: PAT da Netlify)
   escopo: z.enum(["squad", "comunidade"]).default("squad"),
 });
 
@@ -68,7 +69,7 @@ app.post("/mcps", async (c) => {
   const d = body.data;
   const db = await getDb();
   const [m] = await db.insert(s.conexaoMcp).values({
-    nome: d.nome, sistema: d.sistema, descricao: d.descricao ?? null, url: d.url ?? null,
+    nome: d.nome, sistema: d.sistema, descricao: d.descricao ?? null, url: d.url ?? null, token: d.token ?? null,
     escopo: d.escopo === "comunidade" ? "squad" : "squad", // vira global só se o CTO aprovar como tal
     squadId: me.squadId, comunidadeId: me.comunidadeId, criadoPor: me.id, status: "configurado", aprovacao: "rascunho",
   }).returning();

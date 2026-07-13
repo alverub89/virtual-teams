@@ -217,8 +217,9 @@ app.get("/mcps", async (c) => {
   const mcps = await db.select().from(s.conexaoMcp);
   const tools = await db.select().from(s.tool);
   return c.json(
-    mcps.map((m: any) => ({
+    mcps.map(({ token, ...m }: any) => ({
       ...m,
+      temToken: !!token,
       tools: tools.filter((t: any) => t.conexaoMcpId === m.id),
     }))
   );
@@ -527,6 +528,7 @@ const McpIn = z.object({
   sistema: z.string().min(2),
   descricao: z.string().optional(),
   url: z.string().optional(),
+  token: z.string().optional(), // credencial p/ MCP remoto (Bearer). Em branco no PUT = mantém.
   escopo: z.enum(["global", "squad"]).default("global"),
   squadId: z.string().uuid().optional().nullable(),
 });
@@ -544,6 +546,7 @@ app.post("/mcps", cfg, async (c) => {
       sistema: d.sistema,
       descricao: d.descricao ?? null,
       url: d.url ?? null,
+      token: d.token || null,
       escopo: d.escopo,
       squadId: d.escopo === "squad" ? d.squadId ?? null : null,
       comunidadeId: me.comunidadeId,
@@ -557,8 +560,10 @@ app.post("/mcps", cfg, async (c) => {
 app.put("/mcps/:id", cfg, async (c) => {
   const body = McpIn.partial().safeParse(await c.req.json());
   if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const patch = { ...body.data } as any;
+  if (!patch.token) delete patch.token; // token em branco = mantém o atual
   const db = await getDb();
-  await db.update(s.conexaoMcp).set(body.data as any).where(eq(s.conexaoMcp.id, c.req.param("id")));
+  await db.update(s.conexaoMcp).set(patch).where(eq(s.conexaoMcp.id, c.req.param("id")));
   return c.json({ ok: true });
 });
 
@@ -580,7 +585,8 @@ app.get("/mcps/:id", async (c) => {
   if (!m) return c.json({ error: "não encontrado" }, 404);
   const tools = (await db.select().from(s.tool)).filter((t: any) => t.conexaoMcpId === id);
   const base = process.env.APP_URL ?? process.env.URL ?? "";
-  return c.json({ ...m, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools });
+  const { token, ...mSemToken } = m as any;
+  return c.json({ ...mSemToken, temToken: !!token, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools });
 });
 
 const ToolIn = z.object({
@@ -767,20 +773,33 @@ app.post("/mcps/:id/gerar", cfg, async (c) => {
 
 /* ---------- Cliente MCP: conectar e testar um servidor MCP externo ---------- */
 
+// Resolve a URL e o token de um MCP: por mcpId (busca no banco, token fica no
+// servidor) ou por url/token direto (ad-hoc, ex.: presets públicos sem auth).
+async function resolverMcp(body: { mcpId?: string; url?: string; token?: string }) {
+  if (body.mcpId) {
+    const db = await getDb();
+    const [m] = await db.select().from(s.conexaoMcp).where(eq(s.conexaoMcp.id, body.mcpId));
+    if (m?.url) return { url: m.url as string, token: (m.token as string) ?? undefined };
+  }
+  return { url: body.url, token: body.token };
+}
+
 // Conecta (como cliente) a um servidor MCP remoto e lista as tools reais dele.
 app.post("/mcp-client/tools", cfg, async (c) => {
-  const { url } = (await c.req.json().catch(() => ({}))) as { url?: string };
+  const body = (await c.req.json().catch(() => ({}))) as { mcpId?: string; url?: string; token?: string };
+  const { url, token } = await resolverMcp(body);
   if (!url || !/^https?:\/\//.test(url)) return c.json({ ok: false, erro: "informe uma URL http(s) do servidor MCP" }, 400);
   const { listarToolsRemoto } = await import("../_lib/mcpclient");
-  return c.json(await listarToolsRemoto(url));
+  return c.json(await listarToolsRemoto(url, token));
 });
 
 // Chama uma tool de um servidor MCP remoto (tools/call) e devolve o resultado.
 app.post("/mcp-client/call", cfg, async (c) => {
-  const { url, name, arguments: args } = (await c.req.json().catch(() => ({}))) as { url?: string; name?: string; arguments?: Record<string, unknown> };
-  if (!url || !name) return c.json({ ok: false, erro: "url e name são obrigatórios" }, 400);
+  const body = (await c.req.json().catch(() => ({}))) as { mcpId?: string; url?: string; token?: string; name?: string; arguments?: Record<string, unknown> };
+  const { url, token } = await resolverMcp(body);
+  if (!url || !body.name) return c.json({ ok: false, erro: "url/mcpId e name são obrigatórios" }, 400);
   const { chamarToolRemoto } = await import("../_lib/mcpclient");
-  return c.json(await chamarToolRemoto(url, name, args ?? {}));
+  return c.json(await chamarToolRemoto(url, body.name, body.arguments ?? {}, token));
 });
 
 /* ---------- Playground: MCP real pronto para demonstração ---------- */
@@ -798,7 +817,8 @@ app.get("/playground", async (c) => {
     const tools = (await db.select().from(s.tool))
       .filter((t: any) => t.conexaoMcpId === m.id)
       .map((t: any) => ({ ...t, exemplo: exemplos.get(t.nome) ?? {} }));
-    mcp = { ...m, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools };
+    const { token, ...mSemToken } = m as any;
+    mcp = { ...mSemToken, temToken: !!token, endpoint: m.slug ? `${base}/api/mcp/${m.slug}` : null, tools };
   }
   const registrados = new Set((await db.select().from(s.conexaoMcp)).map((x: any) => x.nome));
   return c.json({
@@ -933,7 +953,7 @@ app.get("/aprovacoes", cfg, async (c) => {
   const mcps = (await db.select().from(s.conexaoMcp)).filter((m: any) => m.aprovacao === "pendente");
   return c.json({
     tools: tools.map((t: any) => ({ ...t, squadNome: nomeSquad(t.squadId) })),
-    mcps: mcps.map((m: any) => ({ ...m, squadNome: nomeSquad(m.squadId) })),
+    mcps: mcps.map(({ token, ...m }: any) => ({ ...m, temToken: !!token, squadNome: nomeSquad(m.squadId) })),
   });
 });
 

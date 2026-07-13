@@ -139,7 +139,7 @@ export default function McpDetalhe() {
 
       {mcp.url && (
         <div style={{ marginBottom: 8 }}>
-          <RemoteMcpTester url={mcp.url} />
+          <RemoteMcpTester mcpId={mcp.id} />
         </div>
       )}
 
