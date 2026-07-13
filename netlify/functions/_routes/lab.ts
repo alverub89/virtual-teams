@@ -31,7 +31,10 @@ app.get("/", async (c) => {
     tools: todasTools.filter((t: any) => (t.squadId === me.squadId || t.criadoPor === me.id) && t.aprovacao !== "aprovado").map((t: any) => ({ ...t })),
     mcps: todosMcps.filter((m: any) => meuMcp(m) && m.aprovacao !== "aprovado").map(semTk),
     // "disponíveis" = aprovados que a squad pode usar (globais + da squad)
-    disponiveis: todosMcps.filter(disponivelMcp).map(semTk),
+    disponiveis: todosMcps.filter(disponivelMcp).map((m: any) => ({
+      ...semTk(m),
+      toolsNomes: todasTools.filter((t: any) => t.conexaoMcpId === m.id).map((t: any) => t.nome),
+    })),
     toolsDisponiveis: todasTools.filter((t: any) => t.aprovacao === "aprovado" && (t.comunidadeId === me.comunidadeId || t.squadId === me.squadId)).length,
   });
 });

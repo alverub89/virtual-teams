@@ -6,7 +6,7 @@ import { RemoteMcpTester } from "../../components/RemoteMcp";
 import { useToast } from "../../lib/toast";
 
 interface Tool { id: string; nome: string; descricao: string | null; permissao: string; execucao: string; aprovacao: string; motivoRejeicao: string | null }
-interface Mcp { id: string; nome: string; sistema: string; descricao: string | null; url: string | null; aprovacao: string; motivoRejeicao: string | null; endpoint: string | null; escopo?: string }
+interface Mcp { id: string; nome: string; sistema: string; descricao: string | null; url: string | null; aprovacao: string; motivoRejeicao: string | null; endpoint: string | null; escopo?: string; toolsNomes?: string[] }
 interface Dados { podeCriar: boolean; tools: Tool[]; mcps: Mcp[]; disponiveis: Mcp[] }
 
 const STATUS: Record<string, { label: string; tone: "neutral" | "warn" | "good" | "crit" }> = {
@@ -131,7 +131,13 @@ export default function Lab() {
             </div>
             {m.url
               ? <RemoteMcpTester mcpId={m.id} apiBase="/lab" />
-              : <Card pad><p className="sub">{m.descricao || m.sistema}</p>{m.endpoint && <div className="prompt-box" style={{ marginTop: 6, fontSize: 11 }}>{m.endpoint}</div>}</Card>}
+              : <Card pad>
+                  <p className="sub">{m.descricao || m.sistema}</p>
+                  {m.toolsNomes && m.toolsNomes.length > 0
+                    ? <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>{m.toolsNomes.map((n) => <span key={n} className="pill">🔧 {n}</span>)}</div>
+                    : <p className="sub" style={{ marginTop: 6, opacity: .7 }}>Sem tools cadastradas.</p>}
+                  {m.endpoint && <div className="prompt-box" style={{ marginTop: 6, fontSize: 11 }}>{m.endpoint}</div>}
+                </Card>}
           </div>
         ))}
       </div>
