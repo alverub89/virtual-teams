@@ -457,6 +457,62 @@ export const execucaoCheckpoint = aiWorkspace.table("execucao_checkpoint", {
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ---------- fluxos de trabalho (workflows da squad) ---------- */
+
+// Um fluxo de trabalho que a squad monta para o que ela faz: uma sequência de
+// passos onde cada passo é um agente (roda a IA) ou uma validação humana (porta
+// que pausa até alguém aprovar) — ou aciona um MCP. Reutilizável: gera runs.
+export const workflow = aiWorkspace.table("workflow", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  squadId: uuid("squad_id").notNull().references(() => squad.id),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  status: text("status").notNull().default("rascunho"), // rascunho|ativo|arquivado
+  criadoPor: uuid("criado_por"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const workflowPasso = aiWorkspace.table("workflow_passo", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workflowId: uuid("workflow_id").notNull().references(() => workflow.id),
+  ordem: integer("ordem").notNull(),
+  tipo: text("tipo").notNull().default("agente"), // agente|validacao|mcp
+  nome: text("nome").notNull(),
+  instrucao: text("instrucao"), // o que o agente faz / orientação da validação / objetivo do MCP
+  agenteId: uuid("agente_id").references(() => agente.id),
+  config: jsonb("config").$type<Record<string, unknown> | null>(), // mcp: { mcpId }
+});
+
+export const workflowRun = aiWorkspace.table("workflow_run", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workflowId: uuid("workflow_id").notNull().references(() => workflow.id),
+  squadId: uuid("squad_id").notNull(),
+  titulo: text("titulo").notNull(),
+  entrada: text("entrada"), // contexto/entrada informado ao iniciar a run
+  status: text("status").notNull().default("em_andamento"), // em_andamento|aguardando|concluido|cancelado
+  passoAtual: integer("passo_atual").notNull().default(0),
+  criadoPor: uuid("criado_por"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const workflowRunPasso = aiWorkspace.table("workflow_run_passo", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => workflowRun.id),
+  ordem: integer("ordem").notNull(),
+  tipo: text("tipo").notNull(),
+  nome: text("nome").notNull(),
+  agenteNome: text("agente_nome"),
+  instrucao: text("instrucao"),
+  config: jsonb("config").$type<Record<string, unknown> | null>(),
+  status: text("status").notNull().default("pendente"), // pendente|em_execucao|concluido|aguardando|aprovado|rejeitado
+  saida: jsonb("saida").$type<{ resumo?: string; detalhe?: string; passos?: unknown[] } | null>(),
+  comentario: text("comentario"), // feedback humano na validação
+  decididoPor: uuid("decidido_por"),
+  decididoEm: timestamp("decidido_em", { withTimezone: true }),
+});
+
 /* ---------- consumo, auditoria ---------- */
 
 export const consumoTokens = aiWorkspace.table(

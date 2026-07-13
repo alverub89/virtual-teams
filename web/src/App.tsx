@@ -10,6 +10,7 @@ import RequireAuth from "./routes/RequireAuth";
 import Iniciativas from "./routes/squad/Iniciativas";
 import Assistente from "./routes/squad/Assistente";
 import Lab from "./routes/squad/Lab";
+import Workflows, { WorkflowBuilder, WorkflowRun } from "./routes/squad/Workflows";
 import Jornada from "./routes/squad/Jornada";
 import Okrs from "./routes/squad/Okrs";
 import Autonoma from "./routes/squad/Autonoma";
@@ -64,6 +65,9 @@ export default function App() {
             <Route path="/squad/iniciativas/:codigo" element={<Jornada />} />
             <Route path="/squad/assistente" element={<Assistente />} />
             <Route path="/squad/lab" element={<Lab />} />
+            <Route path="/squad/workflows" element={<Workflows />} />
+            <Route path="/squad/workflows/runs/:id" element={<WorkflowRun />} />
+            <Route path="/squad/workflows/:id" element={<WorkflowBuilder />} />
             <Route path="/squad/okrs" element={<Okrs />} />
             <Route path="/squad/autonoma" element={<Autonoma />} />
             <Route path="/squad/capacidades" element={<Capacidades />} />

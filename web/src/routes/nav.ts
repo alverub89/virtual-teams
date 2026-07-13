@@ -44,6 +44,13 @@ export const SQUAD_NAV: NavSection[] = [
         fase: "Fase 1",
       },
       {
+        path: "/squad/workflows",
+        label: "Fluxos de trabalho",
+        title: "Fluxos de trabalho",
+        description: "Monte o que a squad faz: passos de agente e validação humana no meio.",
+        fase: "Fase 2",
+      },
+      {
         path: "/squad/assistente",
         label: "Assistente",
         title: "Assistente",
