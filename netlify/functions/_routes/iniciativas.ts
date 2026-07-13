@@ -220,16 +220,30 @@ function cfgDaEtapa(ordem: number, nome: string) {
 // Contexto que "transborda" entre etapas: os documentos já gerados nas etapas
 // anteriores da iniciativa. Cada etapa constrói sobre a anterior (o PRD parte
 // do Brief, a Arquitetura parte do PRD, etc.) em vez de recomeçar do zero.
-async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 1400): Promise<string> {
-  const docs = await db
+async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 2800): Promise<string> {
+  // Docs da jornada (brief, PRD, arquitetura, histórias…). Exclui os SDDs — são
+  // derivados por história e inflariam/diluiriam o contexto das etapas.
+  const docs = (await db
     .select()
     .from(s.documento)
     .where(eq(s.documento.iniciativaId, ini.id))
-    .orderBy(asc(s.documento.criadoEm));
+    .orderBy(asc(s.documento.criadoEm)))
+    .filter((d: any) => d.tipo !== "sdd");
   if (!docs.length) return "";
-  return docs
-    .map((d: any) => `### ${d.emoji ?? "📄"} ${d.titulo}\n${(d.conteudo ?? "").slice(0, maxCharsPorDoc)}`)
-    .join("\n\n");
+  const TOTAL = 16000; // orçamento total para não estourar o prompt
+  let usado = 0;
+  const partes: string[] = [];
+  for (const d of docs) {
+    const corpo = (d.conteudo ?? "").slice(0, maxCharsPorDoc);
+    if (usado + corpo.length > TOTAL) {
+      // Estourou o orçamento: inclui só título + resumo dos docs restantes.
+      partes.push(`### ${d.emoji ?? "📄"} ${d.titulo}\n${d.resumo ?? "(documento completo em Documentação)"}`);
+      continue;
+    }
+    usado += corpo.length;
+    partes.push(`### ${d.emoji ?? "📄"} ${d.titulo}\n${corpo}`);
+  }
+  return partes.join("\n\n");
 }
 
 // GERAÇÃO ITERATIVA DE HISTÓRIAS (etapa 4): a IA primeiro identifica os ÉPICOS
