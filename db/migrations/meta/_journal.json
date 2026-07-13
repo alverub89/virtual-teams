@@ -155,6 +155,13 @@
       "when": 1784160000000,
       "tag": "0021_acervo_revisao",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784170000000,
+      "tag": "0022_iniciativa_metodo_tokens",
+      "breakpoints": true
     }
   ]
 }

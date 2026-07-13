@@ -88,6 +88,23 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     notaMedia: notas.length ? Math.round((notas.reduce((a: number, b: number) => a + b, 0) / notas.length) * 10) / 10 : null,
   };
 
+  // Adoção do método institucional vs. modelo livre (a partir da criação).
+  const adocaoMetodo = {
+    institucional: (inis as any[]).filter((i: any) => !i.livre).length,
+    livre: (inis as any[]).filter((i: any) => i.livre).length,
+    total: inis.length,
+  };
+
+  // Tokens por ETAPA do método: soma real do que cada fase consumiu gerando
+  // seus documentos, para prever custo por fase (não só por squad no mês).
+  const acumTokEtapa: Record<string, number> = {};
+  for (const e of etapas as any[]) {
+    if (e.tokensGastos > 0) acumTokEtapa[e.nome] = (acumTokEtapa[e.nome] ?? 0) + e.tokensGastos;
+  }
+  const tokensPorEtapa = etapaNomes
+    .filter((nome) => acumTokEtapa[nome])
+    .map((nome) => ({ etapa: nome, tokens: acumTokEtapa[nome] }));
+
   // Fila de aprovações (governança): tamanho, idade da mais antiga e taxa de
   // rejeição entre os itens que já passaram pela fila (têm submetidoEm).
   const governanca = [...tools, ...mcps];
@@ -150,6 +167,8 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     fluxo,
     leadTimePorEtapa,
     masterCobertura,
+    adocaoMetodo,
+    tokensPorEtapa,
     filaAprovacoes,
     coberturaGuardRails,
     tokensPorIniciativa,

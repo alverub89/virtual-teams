@@ -331,6 +331,8 @@ export const iniciativa = aiWorkspace.table(
     descricao: text("descricao"),
     status: text("status").notNull().default("em_andamento"), // em_andamento|concluida|pausada
     etapaAtual: integer("etapa_atual").notNull().default(1),
+    metodoId: uuid("metodo_id"), // método institucional usado (null = modelo livre)
+    livre: boolean("livre").notNull().default(false), // criada no modelo livre (chama a Analista)
     criadoPor: uuid("criado_por").references(() => pessoa.id),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -347,6 +349,7 @@ export const iniciativaEtapa = aiWorkspace.table(
     agenteId: uuid("agente_id").references(() => agente.id),
     status: text("status").notNull().default("pendente"), // pendente|em_andamento|concluida
     artefato: jsonb("artefato").$type<{ titulo: string; secoes: { h: string; itens: string[] }[] } | null>(),
+    tokensGastos: integer("tokens_gastos").notNull().default(0), // tokens consumidos gerando o doc desta etapa
     concluidaEm: timestamp("concluida_em", { withTimezone: true }),
   },
   (t) => [uniqueIndex("iniciativa_etapa_uq").on(t.iniciativaId, t.ordem)]

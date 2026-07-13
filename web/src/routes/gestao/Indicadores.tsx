@@ -15,6 +15,8 @@ interface Indicadores {
   fluxo: { etapa: string; iniciativas: number }[];
   leadTimePorEtapa: { etapa: string; dias: number; amostra: number }[];
   masterCobertura: { total: number; revisados: number; pct: number | null; notaMedia: number | null };
+  adocaoMetodo: { institucional: number; livre: number; total: number };
+  tokensPorEtapa: { etapa: string; tokens: number }[];
   filaAprovacoes: { pendentes: number; maisAntigaDias: number | null; idadeMediaDias: number | null; taxaRejeicao: number | null; decididos: number };
   coberturaGuardRails: { ativos: number; comGuardRails: number; pct: number | null };
   tokensPorIniciativa: { codigo: string; tokens: number }[];
@@ -102,6 +104,33 @@ export default function Indicadores() {
         <Kpi label="Idade média na fila" value={data ? (data.filaAprovacoes.idadeMediaDias ?? "—") : "…"} suffix="dias" />
         <Kpi label="Taxa de rejeição" value={data ? (data.filaAprovacoes.taxaRejeicao != null ? `${data.filaAprovacoes.taxaRejeicao}%` : "—") : "…"} delta={data ? `${data.filaAprovacoes.decididos} decididos` : undefined} />
         <Kpi label="Guard-rails customizados" value={data ? (data.coberturaGuardRails.pct != null ? `${data.coberturaGuardRails.pct}%` : "—") : "…"} delta={data ? `${data.coberturaGuardRails.comGuardRails}/${data.coberturaGuardRails.ativos} agentes` : undefined} />
+      </div>
+
+      <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
+        <div className="card viz">
+          <h3>Tokens por etapa do método</h3>
+          <div className="sub">consumo real de IA gerando o documento de cada fase</div>
+          {(data?.tokensPorEtapa ?? []).length === 0 && <p className="sub">Ainda sem consumo por etapa — aparece conforme os agentes geram documentos.</p>}
+          <HBar rows={(data?.tokensPorEtapa ?? []).map((t) => ({ label: t.etapa, value: Math.round(t.tokens / 1000) }))} />
+          <div className="axis-note">mil tokens por fase (acumulado das iniciativas)</div>
+        </div>
+        <div className="card viz">
+          <h3>Adoção — método institucional vs. modelo livre</h3>
+          <div className="sub">quantas iniciativas seguem o método padrão da diretoria</div>
+          {data && data.adocaoMetodo.total === 0 ? (
+            <p className="sub" style={{ marginTop: 10 }}>Nenhuma iniciativa criada ainda.</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap" }}>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.adocaoMetodo.institucional ?? "—"}</div><div className="sub">institucional</div></div>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data?.adocaoMetodo.livre ?? "—"}</div><div className="sub">modelo livre</div></div>
+                <div><div className="num" style={{ fontSize: 26, fontWeight: 700 }}>{data && data.adocaoMetodo.total ? Math.round((data.adocaoMetodo.institucional / data.adocaoMetodo.total) * 100) : 0}%</div><div className="sub">no método padrão</div></div>
+              </div>
+              <div className="meter" style={{ marginTop: 12 }}><i style={{ width: `${data && data.adocaoMetodo.total ? Math.round((data.adocaoMetodo.institucional / data.adocaoMetodo.total) * 100) : 0}%` }} /></div>
+              <div className="axis-note">o restante usa o modelo livre (chama a Analista)</div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>

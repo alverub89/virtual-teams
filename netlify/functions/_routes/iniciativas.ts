@@ -7,6 +7,7 @@ import { getProvider } from "../../../ai/provider";
 import { resolveModel, type TipoTarefa } from "../../../ai/router";
 import { composeSystemPrompt } from "../../../ai/prompts";
 import { gerarJson } from "../_lib/aigen";
+import { registrarConsumo } from "../_lib/consumo";
 import { audit } from "../_lib/audit";
 
 const app = new Hono();
@@ -82,6 +83,7 @@ app.post("/", rbac("criar_iniciativa"), async (c) => {
 
   // Monta as etapas: modelo livre (1 etapa com a Analista) | método escolhido | método ativo.
   let etapas: { ordem: number; nome: string; agenteId: string | null }[];
+  let metodoIdFinal: string | null = null;
   if (d.livre) {
     const analista = acharAnalista(agentes);
     etapas = [{ ordem: 1, nome: "Descoberta", agenteId: analista?.id ?? null }];
@@ -90,6 +92,7 @@ app.post("/", rbac("criar_iniciativa"), async (c) => {
     if (d.metodoId) [metodo] = await db.select().from(s.metodo).where(eq(s.metodo.id, d.metodoId));
     if (!metodo) [metodo] = await db.select().from(s.metodo).where(eq(s.metodo.ativo, true));
     if (!metodo) return c.json({ error: "nenhum método disponível" }, 400);
+    metodoIdFinal = metodo.id;
     const raw = await db.select().from(s.metodoEtapa).where(eq(s.metodoEtapa.metodoId, metodo.id)).orderBy(asc(s.metodoEtapa.ordem));
     etapas = raw.map((e: any) => ({ ordem: e.ordem, nome: e.nome, agenteId: e.agenteId }));
   }
@@ -104,6 +107,8 @@ app.post("/", rbac("criar_iniciativa"), async (c) => {
       capacidadeId: d.capacidadeId ?? null,
       titulo: d.titulo,
       descricao: d.descricao,
+      metodoId: metodoIdFinal,
+      livre: !!d.livre,
       criadoPor: me.id,
     })
     .returning();
@@ -379,14 +384,17 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
     `Conversa da etapa (fonte, se houver):\n${transcript || "(sem conversa; gere o documento completo a partir do contexto acima)"}`;
   // Retry: uma resposta muito curta (stub) é descartada e tentada de novo.
   let markdown = "";
+  let pTok = 0, cTok = 0;
   for (let i = 0; i < 2; i++) {
     try {
       const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 1800, temperature: 0.3 });
+      if (res.usage) { pTok += res.usage.promptTokens; cTok += res.usage.completionTokens; }
       const txt = (res.content ?? "").trim();
       if (txt.length > 120) { markdown = txt; break; }
       markdown = markdown || txt;
     } catch { /* tenta de novo */ }
   }
+  await registrarConsumo(db, { squadId: ini.squadId, iniciativaId: ini.id, etapaOrdem: ordem, promptTokens: pTok, completionTokens: cTok });
   if (!markdown || markdown.length <= 120) {
     // Fallback ESTRUTURADO (nunca um stub de uma linha).
     markdown =
@@ -430,6 +438,7 @@ async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome
   let markdown = "";
   let parecer = { aprovado: false, nota: 0, problemas: [] as string[] };
   let rodada = 0;
+  let pTok = 0, cTok = 0;
   for (rodada = 1; rodada <= maxRodadas; rodada++) {
     await onRodada?.(rodada, "produzir");
     const sys =
@@ -442,6 +451,7 @@ async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome
       : `Revise e MELHORE o documento abaixo corrigindo os problemas apontados pelo Master. Mantenha o que está bom e aprofunde onde falta.\n\nProblemas a corrigir:\n${parecer.problemas.map((p) => `- ${p}`).join("\n")}\n\nDocumentos anteriores (base obrigatória):\n${anteriores || "(nenhum)"}\n\nDocumento atual:\n${markdown}`;
     try {
       const res = await provider.chat({ model, system: sys, messages: [{ role: "user", content: user }], maxTokens: 2000, temperature: 0.3 });
+      if (res.usage) { pTok += res.usage.promptTokens; cTok += res.usage.completionTokens; }
       const novo = (res.content ?? "").trim();
       if (novo) markdown = novo;
     } catch { /* mantém a versão anterior */ }
@@ -450,6 +460,7 @@ async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome
     try {
       const p = await gerarJson({
         tarefa: "arquitetura",
+        onUsage: (u) => { pTok += u.promptTokens; cTok += u.completionTokens; },
         system:
           "Você é o AGENTE MASTER, guardião da qualidade do produto. Avalie CRITICAMENTE o documento da etapa: completude, especificidade, " +
           "consistência com os documentos ANTERIORES (não pode ignorar/contradizer o que já foi definido), e se está acionável/testável. Seja exigente. Responda SOMENTE JSON.",
@@ -468,6 +479,7 @@ async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome
   }
 
   if (!markdown) markdown = `# ${titulo}\n\n(documento não pôde ser gerado)`;
+  await registrarConsumo(db, { squadId: ini.squadId, iniciativaId: ini.id, etapaOrdem: ordem, promptTokens: pTok, completionTokens: cTok });
   const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 200) ?? titulo;
   const [doc] = await db.insert(s.documento).values({
     squadId: ini.squadId, iniciativaId: ini.id, titulo, tipo: cfg.tipo, emoji: cfg.emoji, resumo,

@@ -32,6 +32,7 @@ export async function gerarJson(opts: {
   instrucao: string;
   tarefa?: "arquitetura" | "prd" | "historias" | "resumo" | "classificacao" | "sync";
   maxTokens?: number;
+  onUsage?: (u: { promptTokens: number; completionTokens: number }) => void; // p/ contabilizar tokens por etapa
 }): Promise<any> {
   const provider = await getProvider();
   const model = await resolveModel(opts.tarefa ?? "historias");
@@ -42,6 +43,7 @@ export async function gerarJson(opts: {
     maxTokens: opts.maxTokens ?? 1200,
     temperature: 0.2,
   });
+  if (opts.onUsage && res.usage) opts.onUsage(res.usage);
   return extrairJson(res.content);
 }
 
