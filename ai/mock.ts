@@ -208,7 +208,17 @@ function talvezKbRepo(req: ChatRequest): string | null {
   return JSON.stringify({ resumo, markdown: `# ${titulo} — ${repo}\n\n${corpo}` });
 }
 
+// Mesa-redonda (party): fala curta no papel do agente.
+function talvezParty(req: ChatRequest): string | null {
+  if (!/MESA-REDONDA/i.test(req.system)) return null;
+  const nome = req.system.match(/Você é ([^(]+)\(/)?.[1]?.trim() ?? "Agente";
+  const papel = req.system.match(/\(([^)]+)\)/)?.[1] ?? "";
+  return `Do meu ponto de vista como ${papel || nome}, o ponto central é equilibrar valor e risco. Concordo com o que foi levantado, mas sugiro priorizar o menor incremento que já entrega resultado e medir antes de expandir.`;
+}
+
 function responder(req: ChatRequest): string {
+  const party = talvezParty(req);
+  if (party) return party;
   const sdd = talvezSdd(req);
   if (sdd) return sdd;
   const epicos = talvezEpicos(req);

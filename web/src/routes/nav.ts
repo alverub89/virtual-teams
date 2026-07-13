@@ -58,6 +58,13 @@ export const SQUAD_NAV: NavSection[] = [
         fase: "Fase 1",
       },
       {
+        path: "/squad/party",
+        label: "Mesa-redonda",
+        title: "Mesa-redonda",
+        description: "Vários agentes debatem um tópico; o orquestrador fecha com uma síntese.",
+        fase: "Fase 2",
+      },
+      {
         path: "/squad/lab",
         label: "Tools & MCPs",
         title: "Tools & MCPs da squad",
@@ -154,6 +161,13 @@ export const CONSOLE_NAV: NavSection[] = [
         label: "Métodos",
         title: "Métodos",
         description: "Métodos de trabalho (BMAD e plugáveis) e suas etapas.",
+        fase: "Fase 2",
+      },
+      {
+        path: "/console/acervo",
+        label: "Acervo",
+        title: "Acervo (BMAD)",
+        description: "Agentes, skills, templates e checklists prontos — instale e gere por IA.",
         fase: "Fase 2",
       },
       {

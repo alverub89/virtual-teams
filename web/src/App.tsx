@@ -11,6 +11,8 @@ import Iniciativas from "./routes/squad/Iniciativas";
 import Assistente from "./routes/squad/Assistente";
 import Lab from "./routes/squad/Lab";
 import Workflows, { WorkflowBuilder, WorkflowRun } from "./routes/squad/Workflows";
+import Party, { PartySessao } from "./routes/squad/Party";
+import Acervo from "./routes/console/Acervo";
 import Jornada from "./routes/squad/Jornada";
 import Okrs from "./routes/squad/Okrs";
 import Autonoma from "./routes/squad/Autonoma";
@@ -68,6 +70,8 @@ export default function App() {
             <Route path="/squad/workflows" element={<Workflows />} />
             <Route path="/squad/workflows/runs/:id" element={<WorkflowRun />} />
             <Route path="/squad/workflows/:id" element={<WorkflowBuilder />} />
+            <Route path="/squad/party" element={<Party />} />
+            <Route path="/squad/party/:id" element={<PartySessao />} />
             <Route path="/squad/okrs" element={<Okrs />} />
             <Route path="/squad/autonoma" element={<Autonoma />} />
             <Route path="/squad/capacidades" element={<Capacidades />} />
@@ -95,6 +99,7 @@ export default function App() {
             <Route path="/console/arquitetura" element={<Blueprints />} />
             <Route path="/console/esteira" element={<EsteiraConfig />} />
             <Route path="/console/metodos" element={<Metodos />} />
+            <Route path="/console/acervo" element={<Acervo />} />
             <Route path="/console/agentes" element={<Agentes />} />
             <Route path="/console/agentes/:id" element={<AgenteEdit />} />
             <Route path="/console/mcps" element={<Mcps />} />

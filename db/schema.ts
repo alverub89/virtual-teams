@@ -176,6 +176,62 @@ export const skill = aiWorkspace.table("skill", {
   emoji: text("emoji"),
   descricao: text("descricao"),
   instrucoes: text("instrucoes").notNull(),
+  origem: text("origem").notNull().default("manual"), // manual | bmad | ia
+});
+
+/* ---------- acervo: templates e checklists (estilo BMAD) ---------- */
+
+export const template = aiWorkspace.table("template", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  tipo: text("tipo").notNull().default("generico"), // prd|arquitetura|story|sdd|generico
+  emoji: text("emoji"),
+  descricao: text("descricao"),
+  conteudo: text("conteudo").notNull(), // markdown com placeholders {{...}}
+  escopo: text("escopo").notNull().default("global"), // global|comunidade
+  comunidadeId: uuid("comunidade_id"),
+  origem: text("origem").notNull().default("manual"), // manual | bmad | ia
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const checklist = aiWorkspace.table("checklist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  emoji: text("emoji"),
+  descricao: text("descricao"),
+  categoria: text("categoria").notNull().default("generico"), // dor|dod|revisao|seguranca|generico
+  itens: jsonb("itens").$type<string[]>().notNull().default([]),
+  escopo: text("escopo").notNull().default("global"),
+  comunidadeId: uuid("comunidade_id"),
+  origem: text("origem").notNull().default("manual"),
+  ativo: boolean("ativo").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ---------- party mode: mesa-redonda de agentes ---------- */
+
+export const partySessao = aiWorkspace.table("party_sessao", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  squadId: uuid("squad_id"),
+  titulo: text("titulo").notNull(),
+  topico: text("topico").notNull(),
+  status: text("status").notNull().default("em_andamento"), // em_andamento|concluido|erro
+  progresso: text("progresso"),
+  sintese: text("sintese"),
+  criadoPor: uuid("criado_por"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const partyTurno = aiWorkspace.table("party_turno", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessaoId: uuid("sessao_id").notNull().references(() => partySessao.id),
+  ordem: integer("ordem").notNull(),
+  agenteId: uuid("agente_id"),
+  agenteNome: text("agente_nome").notNull(),
+  emoji: text("emoji"),
+  conteudo: text("conteudo").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const agenteSkill = aiWorkspace.table("agente_skill", {

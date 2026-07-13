@@ -120,6 +120,13 @@
       "when": 1784110000000,
       "tag": "0016_metodo_agente_config",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784120000000,
+      "tag": "0017_bmad_acervo",
+      "breakpoints": true
     }
   ]
 }

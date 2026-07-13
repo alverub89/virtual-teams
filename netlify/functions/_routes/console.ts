@@ -1000,4 +1000,104 @@ const decidir = (tbl: any, tipo: string) => async (c: any) => {
 app.post("/aprovacoes/tool/:id", cfg, decidir(s.tool, "tool"));
 app.post("/aprovacoes/mcp/:id", cfg, decidir(s.conexaoMcp, "mcp"));
 
+/* ---------- acervo (estilo BMAD): agentes, skills, templates, checklists ---------- */
+
+app.get("/acervo", async (c) => {
+  const db = await getDb();
+  const [agentes, skills, templates, checklists] = await Promise.all([
+    db.select().from(s.agente),
+    db.select().from(s.skill),
+    db.select().from(s.template),
+    db.select().from(s.checklist),
+  ]);
+  const jaTemBmad = agentes.some((a: any) => a.origem === "bmad") || templates.some((t: any) => t.origem === "bmad");
+  return c.json({
+    jaTemBmad,
+    contagem: { agentes: agentes.length, skills: skills.length, templates: templates.length, checklists: checklists.length },
+    agentes: agentes.map((a: any) => ({ id: a.id, nome: a.nome, papel: a.papel, emoji: a.emoji, origem: a.origem ?? "manual" })),
+    skills: skills.map((sk: any) => ({ id: sk.id, nome: sk.nome, emoji: sk.emoji, descricao: sk.descricao, origem: sk.origem ?? "manual" })),
+    templates: templates.map((t: any) => ({ id: t.id, nome: t.nome, tipo: t.tipo, emoji: t.emoji, descricao: t.descricao, conteudo: t.conteudo, origem: t.origem })),
+    checklists: checklists.map((ck: any) => ({ id: ck.id, nome: ck.nome, categoria: ck.categoria, emoji: ck.emoji, descricao: ck.descricao, itens: ck.itens, origem: ck.origem })),
+  });
+});
+
+app.post("/acervo/instalar-bmad", cfg, async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const { instalarBmad } = await import("../_lib/bmad");
+  const contagem = await instalarBmad(db, me.comunidadeId ?? null);
+  await audit(me, "instalar_acervo_bmad", "acervo", contagem);
+  return c.json({ ok: true, ...contagem });
+});
+
+// Gerador por IA: descreve o item e a IA cria o agente/skill/template/checklist.
+app.post("/acervo/gerar", cfg, async (c) => {
+  const me = c.get("me");
+  const body = z.object({ tipo: z.enum(["agente", "skill", "template", "checklist"]), descricao: z.string().min(4).max(600) }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const db = await getDb();
+  const { gerarJson } = await import("../_lib/aigen");
+  const { tipo, descricao } = body.data;
+
+  const specs: Record<string, { system: string; formato: string }> = {
+    agente: { system: "Você cria PERSONAS de agentes de IA para um time de produto (estilo BMAD).", formato: '{ "nome": "curto", "papel": "descrição curta", "emoji": "1 emoji", "personalidade": "como pensa e age (2-4 frases)", "nivelModelo": "avancado|intermediario|leve", "guardRails": ["regra", "…"] }' },
+    skill: { system: "Você cria SKILLS (instruções reutilizáveis) para agentes de IA.", formato: '{ "nome": "curto", "emoji": "1 emoji", "descricao": "1 frase", "instrucoes": "instrução acionável de como executar a skill" }' },
+    template: { system: "Você cria TEMPLATES de documento em Markdown com placeholders {{...}}.", formato: '{ "nome": "curto", "tipo": "prd|arquitetura|story|sdd|generico", "emoji": "1 emoji", "descricao": "1 frase", "conteudo": "markdown com seções e placeholders {{...}}" }' },
+    checklist: { system: "Você cria CHECKLISTS de verificação para um time de produto.", formato: '{ "nome": "curto", "categoria": "dor|dod|revisao|seguranca|generico", "emoji": "1 emoji", "descricao": "1 frase", "itens": ["item verificável", "…"] }' },
+  };
+  const sp = specs[tipo];
+  let obj: any = null;
+  try {
+    obj = await gerarJson({ tarefa: "arquitetura", system: `${sp.system} Responda SOMENTE JSON.`, instrucao: `Descrição do que criar: ${descricao}\n\nFormato JSON: ${sp.formato}`, maxTokens: 1200 });
+  } catch { return c.json({ error: "a IA não retornou um item válido — tente detalhar a descrição" }, 502); }
+  if (!obj?.nome) return c.json({ error: "item inválido gerado" }, 502);
+
+  let criado: any;
+  if (tipo === "agente") {
+    [criado] = await db.insert(s.agente).values({ nome: obj.nome, papel: obj.papel ?? "Agente", emoji: obj.emoji ?? "🤖", personalidade: obj.personalidade ?? descricao, nivelModelo: ["avancado", "intermediario", "leve"].includes(obj.nivelModelo) ? obj.nivelModelo : "intermediario", guardRails: Array.isArray(obj.guardRails) ? obj.guardRails.map(String) : [], origem: "ia", ativo: true }).returning();
+  } else if (tipo === "skill") {
+    [criado] = await db.insert(s.skill).values({ nome: obj.nome, emoji: obj.emoji ?? "🧩", descricao: obj.descricao ?? null, instrucoes: obj.instrucoes ?? descricao, origem: "ia" }).returning();
+  } else if (tipo === "template") {
+    [criado] = await db.insert(s.template).values({ nome: obj.nome, tipo: ["prd", "arquitetura", "story", "sdd", "generico"].includes(obj.tipo) ? obj.tipo : "generico", emoji: obj.emoji ?? "📄", descricao: obj.descricao ?? null, conteudo: obj.conteudo ?? `# ${obj.nome}`, escopo: me.comunidadeId ? "comunidade" : "global", comunidadeId: me.comunidadeId ?? null, origem: "ia" }).returning();
+  } else {
+    [criado] = await db.insert(s.checklist).values({ nome: obj.nome, categoria: ["dor", "dod", "revisao", "seguranca", "generico"].includes(obj.categoria) ? obj.categoria : "generico", emoji: obj.emoji ?? "✅", descricao: obj.descricao ?? null, itens: Array.isArray(obj.itens) ? obj.itens.map(String) : [], escopo: me.comunidadeId ? "comunidade" : "global", comunidadeId: me.comunidadeId ?? null, origem: "ia" }).returning();
+  }
+  await audit(me, "gerar_item_acervo", `${tipo}:${obj.nome}`);
+  return c.json({ ok: true, tipo, item: criado }, 201);
+});
+
+// CRUD mínimo de templates e checklists.
+const TemplateIn = z.object({ nome: z.string().min(2), tipo: z.string().optional(), emoji: z.string().optional(), descricao: z.string().optional(), conteudo: z.string().min(1) });
+app.post("/acervo/templates", cfg, async (c) => {
+  const me = c.get("me"); const db = await getDb();
+  const b = TemplateIn.safeParse(await c.req.json()); if (!b.success) return c.json({ error: "dados inválidos" }, 400);
+  const [t] = await db.insert(s.template).values({ ...b.data, tipo: b.data.tipo ?? "generico", escopo: me.comunidadeId ? "comunidade" : "global", comunidadeId: me.comunidadeId ?? null, origem: "manual" }).returning();
+  return c.json(t, 201);
+});
+app.put("/acervo/templates/:id", cfg, async (c) => {
+  const db = await getDb(); const b = TemplateIn.partial().safeParse(await c.req.json());
+  if (!b.success) return c.json({ error: "dados inválidos" }, 400);
+  await db.update(s.template).set(b.data).where(eq(s.template.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+app.delete("/acervo/templates/:id", cfg, async (c) => {
+  const db = await getDb(); await db.delete(s.template).where(eq(s.template.id, c.req.param("id"))); return c.json({ ok: true });
+});
+const ChecklistIn = z.object({ nome: z.string().min(2), categoria: z.string().optional(), emoji: z.string().optional(), descricao: z.string().optional(), itens: z.array(z.string()).default([]) });
+app.post("/acervo/checklists", cfg, async (c) => {
+  const me = c.get("me"); const db = await getDb();
+  const b = ChecklistIn.safeParse(await c.req.json()); if (!b.success) return c.json({ error: "dados inválidos" }, 400);
+  const [ck] = await db.insert(s.checklist).values({ ...b.data, categoria: b.data.categoria ?? "generico", escopo: me.comunidadeId ? "comunidade" : "global", comunidadeId: me.comunidadeId ?? null, origem: "manual" }).returning();
+  return c.json(ck, 201);
+});
+app.put("/acervo/checklists/:id", cfg, async (c) => {
+  const db = await getDb(); const b = ChecklistIn.partial().safeParse(await c.req.json());
+  if (!b.success) return c.json({ error: "dados inválidos" }, 400);
+  await db.update(s.checklist).set(b.data as any).where(eq(s.checklist.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+app.delete("/acervo/checklists/:id", cfg, async (c) => {
+  const db = await getDb(); await db.delete(s.checklist).where(eq(s.checklist.id, c.req.param("id"))); return c.json({ ok: true });
+});
+
 export default app;
