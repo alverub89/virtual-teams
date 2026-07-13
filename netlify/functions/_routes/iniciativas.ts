@@ -366,26 +366,33 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
     .orderBy(asc(s.mensagemChat.criadoEm));
   const transcript = historico.map((m: any) => `${m.autorNome}: ${m.conteudo}`).join("\n");
 
+  const anteriores = await contextoEtapasAnteriores(db, ini);
+  const provider = await getProvider();
+  const model = await resolveModel(TAREFA_POR_ETAPA[ordem] ?? "resumo");
+  const system =
+    `Você é ${ag?.nome ?? "o agente da etapa"}. Produza um DOCUMENTO FORMAL em Markdown: ${cfg.foco}. ` +
+    "CONSIDERE os documentos das etapas anteriores e o produto existente. Use títulos (##), listas e tabelas quando ajudar. " +
+    "Seja específico, completo e acionável — NADA de stub ou frase única. Entregue SOMENTE o documento final, em português, sem saudações nem meta-comentários.";
+  const user =
+    `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n` +
+    (anteriores ? `Documentos das etapas anteriores (construa SOBRE eles, mantendo consistência):\n${anteriores}\n\n` : "") +
+    `Conversa da etapa (fonte, se houver):\n${transcript || "(sem conversa; gere o documento completo a partir do contexto acima)"}`;
+  // Retry: uma resposta muito curta (stub) é descartada e tentada de novo.
   let markdown = "";
-  try {
-    const provider = await getProvider();
-    const model = await resolveModel(TAREFA_POR_ETAPA[ordem] ?? "resumo");
-    const system =
-      `Você é ${ag?.nome ?? "o agente da etapa"}. Produza um DOCUMENTO FORMAL em Markdown: ${cfg.foco}. ` +
-      "Use títulos (##), listas e tabelas quando ajudar. Seja específico e acionável. " +
-      "Entregue SOMENTE o documento final, em português — sem saudações, sem conversa e sem meta-comentários.";
-    const anteriores = await contextoEtapasAnteriores(db, ini);
-    const user =
-      `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n` +
-      (anteriores ? `Documentos das etapas anteriores (construa SOBRE eles, mantendo consistência):\n${anteriores}\n\n` : "") +
-      `Conversa da etapa (fonte):\n${transcript || "(sem conversa registrada; gere o documento a partir do contexto acima)"}`;
-    const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 1600, temperature: 0.3 });
-    markdown = (res.content ?? "").trim();
-  } catch {
-    markdown = "";
+  for (let i = 0; i < 2; i++) {
+    try {
+      const res = await provider.chat({ model, system, messages: [{ role: "user", content: user }], maxTokens: 1800, temperature: 0.3 });
+      const txt = (res.content ?? "").trim();
+      if (txt.length > 120) { markdown = txt; break; }
+      markdown = markdown || txt;
+    } catch { /* tenta de novo */ }
   }
-  if (!markdown) {
-    markdown = `## ${titulo}\n\n_Documento gerado a partir da conversa da etapa._\n\n${transcript || "Sem conteúdo registrado nesta etapa."}`;
+  if (!markdown || markdown.length <= 120) {
+    // Fallback ESTRUTURADO (nunca um stub de uma linha).
+    markdown =
+      `# ${titulo}\n\n> ⚠️ Documento preliminar — a síntese completa por IA não pôde ser concluída agora. Revise e complete.\n\n` +
+      `## Contexto\n${ini.descricao ?? "—"}\n\n## Pontos a detalhar\n${cfg.foco}\n\n` +
+      (transcript ? `## Notas da conversa\n${transcript}\n` : "");
   }
   const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 180) ?? titulo;
 

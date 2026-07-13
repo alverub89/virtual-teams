@@ -5,14 +5,15 @@ import { Chip, EstadoErro, HBar, Kpi, PageHead } from "../../components/ui";
 interface Indicadores {
   kpis: {
     iniciativasAtivas: number;
-    leadTimeDias: number;
+    leadTimeDias: number | null;
     taxaSucessoGmud: number | null;
     custoIaMes: number;
     runsAutonomos: number;
     squads: number;
+    squadsEmAlerta?: number;
   };
   fluxo: { etapa: string; iniciativas: number }[];
-  consumoPorSquad: { squad: string; tokens: number; custo: number }[];
+  consumoPorSquad: { squad: string; tokens: number; custo: number; budget: number | null; pct: number | null; alerta: boolean }[];
   gmuds90d: { numero: string; titulo: string; status: string; janela: string | null }[];
   progressoKrs: { descricao: string; progresso: number }[];
 }
@@ -46,13 +47,20 @@ export default function Indicadores() {
           <div className="axis-note">iniciativas em andamento por etapa do método</div>
         </div>
         <div className="card viz">
-          <h3>Consumo de IA por squad — mês atual</h3>
-          <div className="sub">tokens consumidos (todas as chamadas de agentes)</div>
-          <HBar
-            rows={(data?.consumoPorSquad ?? []).map((c) => ({ label: c.squad, value: c.tokens }))}
-            format={(v) => `${(v / 1e6).toFixed(2)}M`}
-          />
-          <div className="axis-note">controle fino no Console › MCPs & modelos</div>
+          <h3>Consumo de IA por squad — mês atual{data && data.kpis.squadsEmAlerta ? ` · ${data.kpis.squadsEmAlerta} em alerta` : ""}</h3>
+          <div className="sub">tokens consumidos vs. orçamento do mês</div>
+          {(data?.consumoPorSquad ?? []).length === 0 && <p className="sub">Sem consumo registrado neste mês.</p>}
+          {(data?.consumoPorSquad ?? []).map((c) => (
+            <div key={c.squad} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 8, fontSize: 12.5, marginBottom: 4, alignItems: "center" }}>
+                <span style={{ flex: 1 }}>{c.squad}</span>
+                {c.alerta && <Chip tone="crit">⚠️ {c.pct}%</Chip>}
+                <b className="num">{(c.tokens / 1e6).toFixed(2)}M{c.budget ? ` / ${(c.budget / 1e6).toFixed(1)}M` : ""}</b>
+              </div>
+              <div className="meter"><i style={{ width: `${c.pct != null ? Math.min(100, c.pct) : 0}%`, background: c.alerta ? "#dc2626" : undefined }} /></div>
+            </div>
+          ))}
+          <div className="axis-note">defina o teto por squad no Console; alerta a partir de 80%</div>
         </div>
       </div>
 

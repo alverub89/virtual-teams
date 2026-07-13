@@ -59,6 +59,7 @@ app.get("/setup", async (c) => {
       iniciativas: inis.filter((i: any) => i.squadId === sq.id).length,
       okrs: okrs.filter((o: any) => o.squadId === sq.id).length,
       convitesPendentes: convites.filter((v: any) => v.squadId === sq.id && v.status === "pendente").length,
+      budgetTokensMes: sq.budgetTokensMes ?? null,
     })),
   });
 });
@@ -1124,6 +1125,17 @@ app.put("/acervo/checklists/:id", cfg, async (c) => {
 });
 app.delete("/acervo/checklists/:id", cfg, async (c) => {
   const db = await getDb(); await db.delete(s.checklist).where(eq(s.checklist.id, c.req.param("id"))); return c.json({ ok: true });
+});
+
+/* Orçamento de tokens por squad (mês) — teto com alerta na Gestão. */
+app.put("/squads/:id/budget", cfg, async (c) => {
+  const me = c.get("me");
+  const body = z.object({ budgetTokensMes: z.number().int().min(0).nullable() }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "valor inválido" }, 400);
+  const db = await getDb();
+  await db.update(s.squad).set({ budgetTokensMes: body.data.budgetTokensMes }).where(eq(s.squad.id, c.req.param("id")));
+  await audit(me, "set_budget_tokens", `squad:${c.req.param("id")}`, { budgetTokensMes: body.data.budgetTokensMes });
+  return c.json({ ok: true });
 });
 
 export default app;

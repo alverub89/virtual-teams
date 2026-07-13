@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { api, useMe } from "../../lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, put, useMe } from "../../lib/api";
 import { Card, Chip, PageHead } from "../../components/ui";
+import { useToast } from "../../lib/toast";
 
 interface Setup {
   comunidade: { nome: string } | null;
@@ -17,6 +19,7 @@ interface Setup {
     iniciativas: number;
     okrs: number;
     convitesPendentes: number;
+    budgetTokensMes: number | null;
   }[];
 }
 
@@ -81,6 +84,7 @@ export default function CfgHome() {
               <span><b>{sq.iniciativas}</b> iniciativas</span>
               <span><b>{sq.okrs}</b> OKRs</span>
             </div>
+            <BudgetSetter squadId={sq.id} atual={sq.budgetTokensMes} />
           </Card>
         ))}
       </div>
@@ -100,5 +104,25 @@ export default function CfgHome() {
         </Card>
       </div>
     </>
+  );
+}
+
+// Editor do teto de tokens/mês da squad (alerta na Gestão a partir de 80%).
+function BudgetSetter({ squadId, atual }: { squadId: string; atual: number | null }) {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [v, setV] = useState(atual != null ? String(Math.round(atual / 1000)) : "");
+  const salvar = useMutation({
+    mutationFn: () => put(`/console/squads/${squadId}/budget`, { budgetTokensMes: v.trim() ? Math.max(0, parseInt(v, 10) || 0) * 1000 : null }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["console-setup"] }); toast("💰 Orçamento atualizado"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 10, fontSize: 12.5 }}>
+      <span className="sub">Teto de tokens/mês:</span>
+      <input className="in" style={{ width: 90 }} type="number" min={0} value={v} onChange={(e) => setV(e.target.value)} placeholder="—" />
+      <span className="sub">mil</span>
+      <button className="btn" onClick={() => salvar.mutate()}>{salvar.isPending ? "…" : "Salvar"}</button>
+    </div>
   );
 }
