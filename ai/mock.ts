@@ -208,6 +208,19 @@ function talvezKbRepo(req: ChatRequest): string | null {
   return JSON.stringify({ resumo, markdown: `# ${titulo} — ${repo}\n\n${corpo}` });
 }
 
+// Sugestão de capacidade ao final da iniciativa.
+function talvezSugCapacidade(req: ChatRequest): string | null {
+  if (!/sugira UMA capacidade de neg[oó]cio/i.test(req.system)) return null;
+  const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const tit = ultima.match(/—\s*(.+)/)?.[1]?.split("\n")[0]?.trim() ?? "a iniciativa";
+  return JSON.stringify({
+    nome: `Gestão de ${tit}`.slice(0, 60),
+    descricao: `Capacidade que passou a existir com a entrega de "${tit}": operar e evoluir a funcionalidade de ponta a ponta.`,
+    nivel: 1, pai: null, fluxoValor: "Aceitar e liquidar pagamentos", repos: [],
+    justificativa: "A iniciativa consolidou um conjunto coeso de regras e fluxos que caracterizam uma capacidade de negócio própria.",
+  });
+}
+
 // Mesa-redonda (party): fala curta no papel do agente.
 function talvezParty(req: ChatRequest): string | null {
   if (!/MESA-REDONDA/i.test(req.system)) return null;
@@ -217,6 +230,8 @@ function talvezParty(req: ChatRequest): string | null {
 }
 
 function responder(req: ChatRequest): string {
+  const sugCap = talvezSugCapacidade(req);
+  if (sugCap) return sugCap;
   const party = talvezParty(req);
   if (party) return party;
   const sdd = talvezSdd(req);

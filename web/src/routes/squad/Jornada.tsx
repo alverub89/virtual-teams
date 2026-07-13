@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post, streamChat, useMe } from "../../lib/api";
-import { Button, Chip, PageHead } from "../../components/ui";
+import { Button, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
 interface Etapa {
@@ -65,6 +65,19 @@ export default function JornadaPage() {
     onSettled: () => setGerandoSdd(null),
   });
   const copiarPrompt = async (txt: string) => { try { await navigator.clipboard.writeText(txt); toast("📋 Prompt copiado — cole no seu agente de código"); } catch { toast("⚠️ Não foi possível copiar"); } };
+
+  // Capacidade sugerida pela IA ao final do desenvolvimento
+  const [cap, setCap] = useState<{ nome: string; descricao: string; nivel: number; pai: string | null; fluxoValor: string | null; repos: string[]; justificativa: string } | null>(null);
+  const sugerirCap = useMutation({
+    mutationFn: () => post<{ sugestao: any }>(`/iniciativas/${codigo}/sugerir-capacidade`),
+    onSuccess: (r) => setCap(r.sugestao),
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+  const salvarCap = useMutation({
+    mutationFn: () => post(`/iniciativas/${codigo}/capacidade`, cap ? { nome: cap.nome, descricao: cap.descricao || null, nivel: cap.nivel, pai: cap.pai || null, fluxoValor: cap.fluxoValor || null, repos: cap.repos } : {}),
+    onSuccess: () => { setCap(null); qc.invalidateQueries({ queryKey: ["iniciativa", codigo] }); qc.invalidateQueries({ queryKey: ["capacidades"] }); toast("🧭 Capacidade registrada na base"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   if (!ini) return <p className="muted">Carregando jornada…</p>;
 
@@ -198,10 +211,40 @@ export default function JornadaPage() {
               </Button>
             </div>
           )}
+
+          {ini.status === "concluida" && (me?.papel === "pm" || me?.papel === "tech_lead") && (
+            <div className="card" style={{ marginTop: 16, borderLeft: "3px solid var(--accent, #2563eb)" }}>
+              <h4 style={{ margin: "0 0 4px" }}>🧭 Capacidade de negócio</h4>
+              <p className="sub" style={{ marginBottom: 10 }}>Desenvolvimento concluído. A IA pode sugerir a capacidade que emergiu deste trabalho para registrar na base.</p>
+              <Button variant="primary" onClick={() => sugerirCap.mutate()}>{sugerirCap.isPending ? "Analisando o que foi entregue…" : "✨ Sugerir capacidade pela IA"}</Button>
+            </div>
+          )}
         </div>
 
         <ChatEtapa codigo={ini.codigo} etapa={etapaSel} agente={etapa?.agente ?? null} bloqueado={etapa?.status === "pendente"} />
       </div>
+
+      {cap && (
+        <Modal
+          title="🧭 Capacidade sugerida pela IA"
+          subtitle="Revise e ajuste antes de registrar na base de capacidades da squad."
+          onClose={() => setCap(null)}
+          foot={<><Button onClick={() => setCap(null)}>Descartar</Button><Button variant="primary" onClick={() => cap.nome.trim() && salvarCap.mutate()}>{salvarCap.isPending ? "Registrando…" : "Registrar na base"}</Button></>}
+        >
+          {cap.justificativa && <p className="sub" style={{ marginTop: 0 }}>💡 {cap.justificativa}</p>}
+          <Fld label="Nome"><input className="in" value={cap.nome} onChange={(e) => setCap({ ...cap, nome: e.target.value })} /></Fld>
+          <Fld label="Descrição"><textarea className="in" rows={3} value={cap.descricao} onChange={(e) => setCap({ ...cap, descricao: e.target.value })} /></Fld>
+          <div className="fld-row">
+            <Fld label="Nível">
+              <select className="in" value={cap.nivel} onChange={(e) => setCap({ ...cap, nivel: Number(e.target.value) })}>
+                <option value={1}>L1 (macro)</option><option value={2}>L2 (sub)</option>
+              </select>
+            </Fld>
+            <Fld label="Fluxo de valor"><input className="in" value={cap.fluxoValor ?? ""} onChange={(e) => setCap({ ...cap, fluxoValor: e.target.value })} /></Fld>
+          </div>
+          {cap.nivel === 2 && <Fld label="Capacidade pai (L1)"><input className="in" value={cap.pai ?? ""} onChange={(e) => setCap({ ...cap, pai: e.target.value })} placeholder="Nome da capacidade L1" /></Fld>}
+        </Modal>
+      )}
     </>
   );
 }

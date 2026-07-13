@@ -665,4 +665,69 @@ app.post("/:codigo/historias/:id/sdd", rbac("criar_iniciativa"), async (c) => {
   return c.json({ ok: true, docId: docSdd.id, promptPronto });
 });
 
+/* Ao final do desenvolvimento: a IA SUGERE uma capacidade para registrar na base. */
+app.post("/:codigo/sugerir-capacidade", rbac("criar_iniciativa"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
+  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
+
+  const contexto = await contextoEtapasAnteriores(db, ini);
+  const base = (await db.select().from(s.capacidade)).filter((cp: any) => cp.squadId === ini.squadId);
+  const baseTxt = base.map((cp: any) => `- ${cp.nome} (L${cp.nivel ?? 1}${cp.fluxoValor ? `, fluxo: ${cp.fluxoValor}` : ""})`).join("\n") || "(base vazia)";
+
+  let sug: any = null;
+  try {
+    sug = await gerarJson({
+      tarefa: "arquitetura",
+      system:
+        "Você é um arquiteto de negócios (estilo TOGAF). Concluído o desenvolvimento de uma iniciativa, sugira UMA capacidade de negócio " +
+        "(nova, ou evolução de uma existente) que passou a existir/ser reforçada — para registrar na base de capacidades. Responda SOMENTE JSON.",
+      instrucao:
+        `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\nO que foi produzido:\n${contexto || "(sem documentos)"}\n\n` +
+        `Base de capacidades atual (não duplique; complemente):\n${baseTxt}\n\n` +
+        'Formato JSON: { "nome": "curto", "descricao": "o que a capacidade entrega", "nivel": 1|2, "pai": "<nome da capacidade L1 pai ou null>", "fluxoValor": "<fluxo de valor>", "repos": ["owner/repo"], "justificativa": "por que surge desta iniciativa" }',
+      maxTokens: 700,
+    });
+  } catch { return c.json({ error: "a IA não conseguiu sugerir agora — tente novamente" }, 502); }
+  if (!sug?.nome) return c.json({ error: "sugestão inválida" }, 502);
+  return c.json({
+    sugestao: {
+      nome: String(sug.nome), descricao: sug.descricao ? String(sug.descricao) : "",
+      nivel: Number(sug.nivel) === 2 ? 2 : 1, pai: sug.pai ? String(sug.pai) : null,
+      fluxoValor: sug.fluxoValor ? String(sug.fluxoValor) : null,
+      repos: Array.isArray(sug.repos) ? sug.repos.map(String) : [],
+      justificativa: sug.justificativa ? String(sug.justificativa) : "",
+    },
+    base: base.filter((cp: any) => (cp.nivel ?? 1) === 1).map((cp: any) => cp.nome),
+  });
+});
+
+/* Registra na base a capacidade (aprovada) e vincula a iniciativa a ela. */
+app.post("/:codigo/capacidade", rbac("criar_iniciativa"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
+  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
+  const body = z.object({
+    nome: z.string().min(2).max(120),
+    descricao: z.string().max(500).optional().nullable(),
+    nivel: z.union([z.literal(1), z.literal(2)]).default(1),
+    pai: z.string().optional().nullable(),
+    fluxoValor: z.string().optional().nullable(),
+    repos: z.array(z.string()).optional(),
+  }).safeParse(await c.req.json());
+  if (!body.success) return c.json({ error: "dados inválidos" }, 400);
+  const d = body.data;
+  const [cap] = await db.insert(s.capacidade).values({
+    squadId: ini.squadId, nome: d.nome, descricao: d.descricao ?? null, nivel: d.nivel,
+    pai: d.pai ?? null, fluxoValor: d.fluxoValor ?? null, repos: d.repos ?? [], origem: "ia",
+  }).returning();
+  if (!ini.capacidadeId) await db.update(s.iniciativa).set({ capacidadeId: cap.id }).where(eq(s.iniciativa.id, ini.id));
+  await audit(me, "registrar_capacidade_iniciativa", `iniciativa:${ini.codigo}`, { capacidade: d.nome });
+  return c.json(cap, 201);
+});
+
 export default app;
