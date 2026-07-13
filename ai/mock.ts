@@ -43,8 +43,10 @@ function schemaDeTexto(parametros: string): Record<string, unknown> {
 // Detecta o pedido do construtor de MCP e devolve um manifesto JSON válido —
 // para o fluxo "gerar com IA" funcionar em modo demo (sem gateway real).
 function talvezMcpJson(req: ChatRequest): string | null {
-  if (!/servidores? MCP|Model Context Protocol/i.test(req.system)) return null;
   const ultima = [...req.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  // Dispara para o construtor de MCP e para a geração de schema de tool avulsa:
+  // system menciona MCP e a instrução pede um inputSchema a partir de uma lista de tools.
+  if (!/\bMCP\b|Model Context Protocol/i.test(req.system) || !/inputSchema/i.test(ultima)) return null;
   const m = ultima.match(/Tools:\s*(\[[\s\S]*?\])\s*\n\n/);
   let tools: any[] = [];
   try { tools = m ? JSON.parse(m[1]) : []; } catch { tools = []; }

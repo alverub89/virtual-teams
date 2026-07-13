@@ -52,6 +52,7 @@ export default function Agentes() {
         actions={
           <>
             <Link to="/console/skills" className="btn" style={{ textDecoration: "none" }}>Skills</Link>
+            <Link to="/console/tools" className="btn" style={{ textDecoration: "none" }}>Tools</Link>
             <Button variant="primary" onClick={() => setAberto(true)}>+ Novo agente</Button>
           </>
         }

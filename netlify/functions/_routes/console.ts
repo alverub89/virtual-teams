@@ -584,10 +584,25 @@ const ToolIn = z.object({
   nome: z.string().min(2),
   descricao: z.string().optional(),
   permissao: z.enum(["leitura", "escrita", "critica"]).default("leitura"),
-  conexaoMcpId: z.string().uuid(),
+  conexaoMcpId: z.string().uuid().nullish(), // opcional: tool avulsa (do ambiente) não precisa de MCP
   execucao: z.enum(["ia", "http"]).default("ia"),
   parametros: z.string().optional(),
   handlerConfig: z.record(z.any()).optional(),
+});
+
+// Catálogo de tools do ambiente — avulsas (sem MCP) e as que vieram de um MCP.
+app.get("/tools", async (c) => {
+  const db = await getDb();
+  const tools = await db.select().from(s.tool).orderBy(asc(s.tool.nome));
+  const mcps = await db.select().from(s.conexaoMcp);
+  const agTools = await db.select().from(s.agenteTool);
+  return c.json(
+    tools.map((t: any) => ({
+      ...t,
+      origem: mcps.find((m: any) => m.id === t.conexaoMcpId)?.nome ?? null, // null = avulsa
+      agentes: agTools.filter((l: any) => l.toolId === t.id).length,
+    }))
+  );
 });
 
 app.post("/tools", cfg, async (c) => {
@@ -602,14 +617,14 @@ app.post("/tools", cfg, async (c) => {
       nome: d.nome,
       descricao: d.descricao ?? null,
       permissao: d.permissao,
-      conexaoMcpId: d.conexaoMcpId,
+      conexaoMcpId: d.conexaoMcpId ?? null,
       execucao: d.execucao,
       parametros: d.parametros ?? null,
       handlerConfig: d.handlerConfig ?? null,
       comunidadeId: me.comunidadeId,
     })
     .returning();
-  await audit(me, "criar_tool", `tool:${d.nome}`, { execucao: d.execucao });
+  await audit(me, "criar_tool", `tool:${d.nome}`, { execucao: d.execucao, avulsa: !d.conexaoMcpId });
   return c.json(t, 201);
 });
 
@@ -627,6 +642,38 @@ app.delete("/tools/:id", cfg, async (c) => {
   await db.delete(s.agenteTool).where(eq(s.agenteTool.toolId, id));
   await db.delete(s.tool).where(eq(s.tool.id, id));
   return c.json({ ok: true });
+});
+
+// Gera com IA o input_schema (e, para tools ia, o prompt do handler) de UMA tool
+// avulsa — sem depender de um MCP. Deixa a tool pronta para uso/execução.
+app.post("/tools/:id/gerar-schema", cfg, async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [t] = await db.select().from(s.tool).where(eq(s.tool.id, c.req.param("id")));
+  if (!t) return c.json({ error: "não encontrada" }, 404);
+  const { gerarJson } = await import("../_lib/aigen");
+  let g: any;
+  try {
+    g = await gerarJson({
+      tarefa: "arquitetura",
+      system:
+        "Você projeta tools no padrão MCP. A partir da descrição e dos parâmetros em linguagem natural, " +
+        "produza um JSON Schema de entrada (draft-07: objeto com properties/required). Responda SOMENTE JSON.",
+      instrucao:
+        `MCP: "tool avulsa" — sistema/integração: ambiente. Descrição: ${t.descricao ?? "-"}.\n` +
+        `Tools:\n${JSON.stringify([{ nome: t.nome, descricao: t.descricao ?? "", execucao: t.execucao, parametros: t.parametros ?? "" }], null, 2)}\n\n` +
+        'Retorne JSON: { "tools": [ { "nome": "igual ao informado", "inputSchema": {...}, "promptHandler": "instrução de sistema se a tool for ia, senão \\"\\"" } ] }',
+      maxTokens: 1000,
+    });
+  } catch (e) {
+    return c.json({ error: `falha na geração: ${e instanceof Error ? e.message : e}` }, 502);
+  }
+  const info = (g?.tools ?? [])[0] ?? {};
+  const patch: any = { inputSchema: info.inputSchema ?? { type: "object", properties: {} } };
+  if (t.execucao === "ia") patch.handlerConfig = { ...((t.handlerConfig as any) ?? {}), prompt: info.promptHandler || `Execute a tool "${t.nome}": ${t.descricao ?? ""}.` };
+  await db.update(s.tool).set(patch).where(eq(s.tool.id, t.id));
+  await audit(me, "gerar_schema_tool", `tool:${t.nome}`);
+  return c.json({ ok: true, inputSchema: patch.inputSchema });
 });
 
 // Testa uma tool com argumentos, no console (mesma execução do endpoint vivo).

@@ -150,6 +150,13 @@ export const CONSOLE_NAV: NavSection[] = [
         fase: "Fase 2",
       },
       {
+        path: "/console/tools",
+        label: "Tools",
+        title: "Tools do ambiente",
+        description: "Tools avulsas (IA ou HTTP) plugáveis direto nos agentes.",
+        fase: "Fase 2",
+      },
+      {
         path: "/console/mcps",
         label: "MCPs & modelos",
         title: "MCPs & modelos",
