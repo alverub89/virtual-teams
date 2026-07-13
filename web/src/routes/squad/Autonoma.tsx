@@ -27,7 +27,7 @@ interface RunDetalhe extends Run {
     agenteNome: string | null;
     tipo: string;
     status: string;
-    saida: { resumo?: string; itens?: string[] } | null;
+    saida: { resumo?: string; itens?: string[]; revisao?: { nota: number; rodadas: number; problemas: string[] } | null } | null;
   }[];
   checkpoints: {
     id: string;
@@ -224,6 +224,24 @@ export default function Autonoma() {
                             {p.saida.itens.map((it) => (
                               <span key={it} className="pill">{it}</span>
                             ))}
+                          </div>
+                        )}
+                        {p.saida?.revisao && (
+                          <div className="master-note">
+                            <div className="mn-head">
+                              <span className="mn-badge">🎯 Master</span>
+                              <b>{p.saida.revisao.nota}/10</b>
+                              <span className="sub">· {p.saida.revisao.rodadas} rodada(s) de revisão</span>
+                            </div>
+                            {p.saida.revisao.problemas.length > 0 ? (
+                              <ul className="mn-list">
+                                {p.saida.revisao.problemas.map((pb, i) => (
+                                  <li key={i}>{pb}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="sub" style={{ margin: 0 }}>Aprovado sem ressalvas.</p>
+                            )}
                           </div>
                         )}
                         {p.status === "em_execucao" && <p className="muted">executando…</p>}

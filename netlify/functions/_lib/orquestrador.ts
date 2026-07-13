@@ -48,7 +48,9 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
       await db.insert(s.execucaoPasso).values({
         execucaoId: execId, ordem, nome: nomeEtapa, agenteNome: `🎭 Orquestrador${nota}`, tipo: "automatica",
         status: r.ok ? "concluido" : "rejeitado",
-        saida: r.ok ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens } : { resumo: r.erro ?? "falha" },
+        saida: r.ok
+          ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens, revisao: rev ? { nota: rev.nota, rodadas: rev.rodadas, problemas: rev.problemas } : null }
+          : { resumo: r.erro ?? "falha" },
         concluidoEm: new Date(),
       });
       if (!r.ok) throw new Error(r.erro ?? "falha ao concluir etapa");

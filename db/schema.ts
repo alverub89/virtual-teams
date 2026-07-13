@@ -531,7 +531,12 @@ export const execucaoPasso = aiWorkspace.table(
     agenteNome: text("agente_nome"),
     tipo: text("tipo").notNull().default("automatica"), // automatica|checkpoint
     status: text("status").notNull().default("pendente"), // pendente|em_execucao|concluido|aguardando|rejeitado
-    saida: jsonb("saida").$type<{ resumo?: string; itens?: string[] } | null>(),
+    saida: jsonb("saida").$type<{
+      resumo?: string;
+      itens?: string[];
+      // Trilha da revisão do Master: nota final, quantas voltas e o que apontou.
+      revisao?: { nota: number; rodadas: number; problemas: string[] } | null;
+    } | null>(),
     concluidoEm: timestamp("concluido_em", { withTimezone: true }),
   },
   (t) => [uniqueIndex("execucao_passo_uq").on(t.execucaoId, t.ordem)]
