@@ -12,10 +12,11 @@ interface Iniciativa {
   descricao: string | null;
   status: string;
   etapaAtual: number;
+  etapaNome: string | null;
+  etapasTotal: number;
   capacidadeNome: string | null;
 }
-
-const ETAPAS = ["Brief", "PRD", "Arquitetura", "Histórias", "Desenvolvimento", "Esteira & GMUD"];
+interface Metodo { id: string; nome: string; descricao: string | null; escopo: string; etapas: { nome: string; agenteNome: string | null; tipo: string }[] }
 
 export default function Iniciativas() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function Iniciativas() {
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [capacidadeId, setCapacidadeId] = useState("");
+  const [modelo, setModelo] = useState("ativo"); // "ativo" | "livre" | <metodoId>
 
   const { data: inis, isLoading } = useQuery<Iniciativa[]>({
     queryKey: ["iniciativas"],
@@ -35,6 +37,8 @@ export default function Iniciativas() {
     queryKey: ["capacidades"],
     queryFn: () => api("/capacidades"),
   });
+  const { data: metodos } = useQuery<Metodo[]>({ queryKey: ["iniciativa-metodos"], queryFn: () => api("/iniciativas/metodos") });
+  const metodoSel = metodos?.find((m) => m.id === modelo);
 
   const criar = useMutation({
     mutationFn: () =>
@@ -42,11 +46,13 @@ export default function Iniciativas() {
         titulo,
         descricao: descricao || undefined,
         capacidadeId: capacidadeId || undefined,
+        livre: modelo === "livre" ? true : undefined,
+        metodoId: modelo !== "livre" && modelo !== "ativo" ? modelo : undefined,
       }),
     onSuccess: (ini) => {
       qc.invalidateQueries({ queryKey: ["iniciativas"] });
       setNovaAberta(false);
-      toast(`✨ ${ini.codigo} criada — o Agente Analista te espera no Brief`);
+      toast(`✨ ${ini.codigo} criada — ${modelo === "livre" ? "a Analista te espera na Descoberta" : "o agente da primeira etapa te espera"}`);
       navigate(`/squad/iniciativas/${ini.codigo}`);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
@@ -79,7 +85,7 @@ export default function Iniciativas() {
               {ini.status === "concluida" ? (
                 <Chip tone="good">Concluída</Chip>
               ) : (
-                <Chip tone="blue">{`Etapa ${ini.etapaAtual} · ${ETAPAS[ini.etapaAtual - 1]}`}</Chip>
+                <Chip tone="blue">{`Etapa ${ini.etapaAtual}${ini.etapasTotal ? `/${ini.etapasTotal}` : ""} · ${ini.etapaNome ?? ""}`}</Chip>
               )}
               {ini.capacidadeNome && <Chip>{ini.capacidadeNome}</Chip>}
             </div>
@@ -93,7 +99,7 @@ export default function Iniciativas() {
       {novaAberta && (
         <Modal
           title="Nova iniciativa"
-          subtitle="Nasce de uma capacidade da squad e entra na jornada do método ativo."
+          subtitle="Escolha o modelo de trabalho — um método com etapas, ou um modelo livre que começa com a Analista."
           onClose={() => setNovaAberta(false)}
           foot={
             <>
@@ -107,6 +113,20 @@ export default function Iniciativas() {
           <Fld label="Título">
             <input className="in" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Configuração de regras de split por parceiro" />
           </Fld>
+          <Fld label="Modelo de trabalho">
+            <select className="in" value={modelo} onChange={(e) => setModelo(e.target.value)}>
+              <option value="ativo">Método padrão (ativo)</option>
+              {metodos?.map((m) => (
+                <option key={m.id} value={m.id}>{m.nome} · {m.etapas.length} etapa(s){m.escopo === "comunidade" ? " · comunidade" : ""}</option>
+              ))}
+              <option value="livre">✨ Modelo livre — começa com a Analista</option>
+            </select>
+          </Fld>
+          {modelo === "livre" ? (
+            <p className="sub" style={{ marginTop: -4, marginBottom: 10, fontSize: 12.5 }}>Abre uma única etapa de Descoberta com o Agente Analista; você conduz livremente e conclui quando quiser.</p>
+          ) : metodoSel ? (
+            <p className="sub" style={{ marginTop: -4, marginBottom: 10, fontSize: 12.5 }}>Etapas: {metodoSel.etapas.map((e) => e.nome).join(" → ")}</p>
+          ) : null}
           <Fld label="Capacidade">
             <select className="in" value={capacidadeId} onChange={(e) => setCapacidadeId(e.target.value)}>
               <option value="">— selecionar —</option>

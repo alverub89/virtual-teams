@@ -23,10 +23,35 @@ app.get("/", async (c) => {
     .where(eq(s.iniciativa.squadId, squadId))
     .orderBy(desc(s.iniciativa.criadoEm));
   const caps = await db.select().from(s.capacidade).where(eq(s.capacidade.squadId, squadId));
+  const todasEtapas = await db.select().from(s.iniciativaEtapa);
   return c.json(
-    inis.map((i: any) => ({
-      ...i,
-      capacidadeNome: caps.find((cp: any) => cp.id === i.capacidadeId)?.nome ?? null,
+    inis.map((i: any) => {
+      const ets = todasEtapas.filter((e: any) => e.iniciativaId === i.id);
+      const atual = ets.find((e: any) => e.ordem === i.etapaAtual);
+      return {
+        ...i,
+        capacidadeNome: caps.find((cp: any) => cp.id === i.capacidadeId)?.nome ?? null,
+        etapaNome: atual?.nome ?? null,
+        etapasTotal: ets.length,
+      };
+    })
+  );
+});
+
+/* Métodos disponíveis para a squad escolher (públicos + da comunidade). */
+app.get("/metodos", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const metodos = (await db.select().from(s.metodo)).filter(
+    (m: any) => m.ativo && (m.escopo === "publico" || m.comunidadeId === me.comunidadeId)
+  );
+  const etapas = await db.select().from(s.metodoEtapa);
+  const agentes = await db.select().from(s.agente);
+  return c.json(
+    metodos.map((m: any) => ({
+      id: m.id, nome: m.nome, descricao: m.descricao, escopo: m.escopo,
+      etapas: etapas.filter((e: any) => e.metodoId === m.id).sort((a: any, b: any) => a.ordem - b.ordem)
+        .map((e: any) => ({ nome: e.nome, agenteNome: agentes.find((a: any) => a.id === e.agenteId)?.nome ?? null, tipo: e.tipo })),
     }))
   );
 });
@@ -35,22 +60,40 @@ const CriarIniciativa = z.object({
   titulo: z.string().min(4),
   descricao: z.string().optional(),
   capacidadeId: z.string().uuid().optional(),
+  metodoId: z.string().uuid().optional(),
+  livre: z.boolean().optional(),
 });
 
-/* Cria iniciativa com as etapas do método ativo. */
+// Acha o agente Analista (para o modelo livre "que naturalmente chama a analista").
+function acharAnalista(agentes: any[]): any {
+  return agentes.find((a: any) => /analista|analyst/i.test(a.nome) || /analista|descoberta|brief/i.test(a.papel ?? "")) ?? agentes[0] ?? null;
+}
+
+/* Cria iniciativa: método escolhido, método ativo (padrão) ou modelo livre. */
 app.post("/", rbac("criar_iniciativa"), async (c) => {
   const me = c.get("me");
   if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
   const body = CriarIniciativa.safeParse(await c.req.json());
   if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+  const d = body.data;
 
   const db = await getDb();
-  const [metodo] = await db.select().from(s.metodo).where(eq(s.metodo.ativo, true));
-  const etapas = await db
-    .select()
-    .from(s.metodoEtapa)
-    .where(eq(s.metodoEtapa.metodoId, metodo.id))
-    .orderBy(asc(s.metodoEtapa.ordem));
+  const agentes = await db.select().from(s.agente);
+
+  // Monta as etapas: modelo livre (1 etapa com a Analista) | método escolhido | método ativo.
+  let etapas: { ordem: number; nome: string; agenteId: string | null }[];
+  if (d.livre) {
+    const analista = acharAnalista(agentes);
+    etapas = [{ ordem: 1, nome: "Descoberta", agenteId: analista?.id ?? null }];
+  } else {
+    let metodo: any = null;
+    if (d.metodoId) [metodo] = await db.select().from(s.metodo).where(eq(s.metodo.id, d.metodoId));
+    if (!metodo) [metodo] = await db.select().from(s.metodo).where(eq(s.metodo.ativo, true));
+    if (!metodo) return c.json({ error: "nenhum método disponível" }, 400);
+    const raw = await db.select().from(s.metodoEtapa).where(eq(s.metodoEtapa.metodoId, metodo.id)).orderBy(asc(s.metodoEtapa.ordem));
+    etapas = raw.map((e: any) => ({ ordem: e.ordem, nome: e.nome, agenteId: e.agenteId }));
+  }
+  if (!etapas.length) return c.json({ error: "método sem etapas" }, 400);
 
   const num = 100 + Math.floor(Math.random() * 899);
   const [ini] = await db
@@ -58,15 +101,15 @@ app.post("/", rbac("criar_iniciativa"), async (c) => {
     .values({
       codigo: `INI-${num}`,
       squadId: me.squadId,
-      capacidadeId: body.data.capacidadeId ?? null,
-      titulo: body.data.titulo,
-      descricao: body.data.descricao,
+      capacidadeId: d.capacidadeId ?? null,
+      titulo: d.titulo,
+      descricao: d.descricao,
       criadoPor: me.id,
     })
     .returning();
 
   await db.insert(s.iniciativaEtapa).values(
-    etapas.map((e: any) => ({
+    etapas.map((e) => ({
       iniciativaId: ini.id,
       ordem: e.ordem,
       nome: e.nome,
@@ -74,7 +117,7 @@ app.post("/", rbac("criar_iniciativa"), async (c) => {
       status: e.ordem === 1 ? "em_andamento" : "pendente",
     }))
   );
-  await audit(me, "criar_iniciativa", `iniciativa:${ini.codigo}`, { titulo: ini.titulo });
+  await audit(me, "criar_iniciativa", `iniciativa:${ini.codigo}`, { titulo: ini.titulo, livre: !!d.livre, metodoId: d.metodoId ?? null });
   return c.json(ini, 201);
 });
 
@@ -516,16 +559,19 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
     ? await db.select().from(s.agente).where(eq(s.agente.id, etapaRow.agenteId))
     : [null];
 
-  // Etapa 4 (Histórias): geração ITERATIVA — épicos → histórias reais no backlog
-  // + o documento da etapa é o backlog. Demais etapas: documento formal via IA.
+  const totalEtapas = (await db.select().from(s.iniciativaEtapa)).filter((e: any) => e.iniciativaId === ini.id).length;
+
+  // Etapa de Histórias (reconhecida pelo NOME, para funcionar em qualquer método):
+  // geração ITERATIVA — épicos → histórias reais no backlog + o documento é o
+  // backlog. Demais etapas: documento formal via IA.
+  const ehHistorias = /hist[óo]ria/i.test(etapaRow.nome);
   let doc: any;
-  if (ordem === 4) {
+  if (ehHistorias) {
     const historias = await gerarHistoriasIterativo(db, ini, etapaRow);
-    const cfg = DOC_ETAPA[4];
     const nEpicos = new Set(historias.map((h) => h.epico)).size;
     const markdown = historias.length ? docDeHistorias(ini, historias) : "_Nenhuma história pôde ser gerada — trabalhe com o agente no chat e conclua novamente._";
     [doc] = await db.insert(s.documento).values({
-      squadId: ini.squadId, iniciativaId: ini.id, titulo: cfg.titulo(ini.titulo), tipo: cfg.tipo, emoji: cfg.emoji,
+      squadId: ini.squadId, iniciativaId: ini.id, titulo: `Histórias — ${ini.titulo}`, tipo: "doc", emoji: "📝",
       resumo: `${historias.length} história(s) em ${nEpicos} épico(s).`, conteudo: markdown,
       autorNome: ag?.nome ?? "Agente da etapa", escopo: "squad",
     }).returning();
@@ -551,7 +597,7 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
     .where(eq(s.iniciativaEtapa.id, etapaRow.id));
 
   const proxima = ordem + 1;
-  if (proxima > 6) {
+  if (proxima > totalEtapas) {
     await db.update(s.iniciativa).set({ status: "concluida" }).where(eq(s.iniciativa.id, ini.id));
   } else {
     await db
@@ -566,7 +612,7 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
     await abrirProximaEtapa(db, ini, proxima);
   }
   await audit(me, "concluir_etapa", `iniciativa:${ini.codigo}`, { etapa: etapaRow.nome, docId: doc.id });
-  return c.json({ ok: true, proximaEtapa: proxima <= 6 ? proxima : null, docId: doc.id });
+  return c.json({ ok: true, proximaEtapa: proxima <= totalEtapas ? proxima : null, docId: doc.id });
 });
 
 /* Gera o SDD (spec testável) de UMA história — para desenvolver em outro agente. */

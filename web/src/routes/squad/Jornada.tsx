@@ -84,7 +84,7 @@ export default function JornadaPage() {
             {ini.status === "concluida" ? (
               <Chip tone="good">Concluída</Chip>
             ) : (
-              <Chip tone="blue">Etapa {ini.etapaAtual} de 6</Chip>
+              <Chip tone="blue">Etapa {ini.etapaAtual} de {ini.etapas.length}</Chip>
             )}
           </>
         }
