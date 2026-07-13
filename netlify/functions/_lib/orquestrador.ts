@@ -20,14 +20,24 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
       const [etapaRow] = (await db.select().from(s.iniciativaEtapa))
         .filter((e: any) => e.iniciativaId === ini.id && e.ordem === ini.etapaAtual);
       const nomeEtapa = etapaRow?.nome ?? `Etapa ${ini.etapaAtual}`;
-      await db.update(s.execucaoAutonoma).set({ progresso: `Concluindo "${nomeEtapa}"…`, passoAtual: ini.etapaAtual, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
+      await db.update(s.execucaoAutonoma).set({ progresso: `"${nomeEtapa}": o agente está produzindo…`, passoAtual: ini.etapaAtual, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
 
-      const r = await concluirEtapaAtual(db, ini, "Orquestrador");
+      // O Master valida cada documento e manda revisar quantas voltas precisar.
+      const onRodada = async (rodada: number, fase: string, parecer?: { nota: number }) => {
+        const txt = fase === "produzir" ? `escrevendo (rodada ${rodada})`
+          : fase === "criticar" ? `Master avaliando (rodada ${rodada})`
+          : fase === "revisar" ? `revisão pedida pelo Master (nota ${parecer?.nota ?? "?"}/10) — nova volta`
+          : `aprovado pelo Master (nota ${parecer?.nota ?? "?"}/10)`;
+        await db.update(s.execucaoAutonoma).set({ progresso: `"${nomeEtapa}": ${txt}`, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
+      };
+      const r = await concluirEtapaAtual(db, ini, "Orquestrador", { critico: true, onRodada });
       ordem += 1;
+      const rev = r.revisao;
+      const nota = rev ? ` · Master ${rev.nota}/10 em ${rev.rodadas} rodada(s)` : "";
       await db.insert(s.execucaoPasso).values({
-        execucaoId: execId, ordem, nome: nomeEtapa, agenteNome: "🎭 Orquestrador", tipo: "automatica",
+        execucaoId: execId, ordem, nome: nomeEtapa, agenteNome: `🎭 Orquestrador${nota}`, tipo: "automatica",
         status: r.ok ? "concluido" : "rejeitado",
-        saida: r.ok ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens: r.doc.resumo ? [r.doc.resumo] : [] } : { resumo: r.erro ?? "falha" },
+        saida: r.ok ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens: [r.doc.resumo, ...(rev && rev.problemas.length && rev.nota < 8 ? [`Master apontou: ${rev.problemas.slice(0, 2).join("; ")}`] : [])].filter(Boolean) as string[] } : { resumo: r.erro ?? "falha" },
         concluidoEm: new Date(),
       });
       if (!r.ok) throw new Error(r.erro ?? "falha ao concluir etapa");

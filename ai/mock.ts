@@ -208,6 +208,24 @@ function talvezKbRepo(req: ChatRequest): string | null {
   return JSON.stringify({ resumo, markdown: `# ${titulo} — ${repo}\n\n${corpo}` });
 }
 
+// Agente Master (crítico): aprova com nota alta na demo.
+function talvezMaster(req: ChatRequest): string | null {
+  if (!/AGENTE MASTER/i.test(req.system)) return null;
+  return JSON.stringify({ aprovado: true, nota: 8, problemas: [] });
+}
+
+// Produção de documento formal (etapa, modo crítico): devolve um doc estruturado.
+function talvezDocFormal(req: ChatRequest): string | null {
+  if (!/DOCUMENTO FORMAL em Markdown/i.test(req.system)) return null;
+  const nome = req.system.match(/Você é ([^.]+)\./)?.[1]?.trim() ?? "Agente";
+  return (
+    `## Visão geral\nDocumento produzido por ${nome}, considerando os documentos das etapas anteriores.\n\n` +
+    `## Decisões e conteúdo\n- Ponto 1 derivado do que foi definido antes\n- Ponto 2 específico desta etapa\n- Ponto 3 acionável\n\n` +
+    `## Detalhamento\nDescrição concreta e verificável do que deve ser feito, consistente com o funcional e o técnico já definidos.\n\n` +
+    `## Próximos passos\n- Item acionável 1\n- Item acionável 2`
+  );
+}
+
 // Sugestão de capacidade ao final da iniciativa.
 function talvezSugCapacidade(req: ChatRequest): string | null {
   if (!/sugira UMA capacidade de neg[oó]cio/i.test(req.system)) return null;
@@ -230,6 +248,10 @@ function talvezParty(req: ChatRequest): string | null {
 }
 
 function responder(req: ChatRequest): string {
+  const master = talvezMaster(req);
+  if (master) return master;
+  const docF = talvezDocFormal(req);
+  if (docF) return docF;
   const sugCap = talvezSugCapacidade(req);
   if (sugCap) return sugCap;
   const party = talvezParty(req);

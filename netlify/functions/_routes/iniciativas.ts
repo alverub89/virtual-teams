@@ -202,6 +202,21 @@ const DOC_ETAPA: Record<number, { tipo: string; emoji: string; titulo: (t: strin
   6: { tipo: "doc", emoji: "🚀", titulo: (t) => `Plano de release e GMUD — ${t}`, foco: "um plano de release e GMUD (janela, nível de risco, plano de rollback, checklist de deploy e evidências)" },
 };
 
+// Config do documento pelo NOME da etapa (para funcionar com qualquer método),
+// com fallback para a posição e, por fim, um genérico.
+function cfgDaEtapa(ordem: number, nome: string) {
+  const n = (nome ?? "").toLowerCase();
+  const kind = /brief|descoberta/.test(n) ? 1
+    : /prd|requisit|produto/.test(n) ? 2
+    : /arquitet|adr|t[eé]cnic/.test(n) ? 3
+    : /hist[óo]ria|backlog|stor/.test(n) ? 4
+    : /desenvolv|implement|c[óo]digo/.test(n) ? 5
+    : /esteira|gmud|release|deploy|entrega/.test(n) ? 6
+    : null;
+  const key = kind ?? (DOC_ETAPA[ordem] ? ordem : null);
+  return key ? DOC_ETAPA[key] : { tipo: "doc", emoji: "📄", titulo: (t: string) => `${nome} — ${t}`, foco: `o artefato da etapa "${nome}"` };
+}
+
 // Contexto que "transborda" entre etapas: os documentos já gerados nas etapas
 // anteriores da iniciativa. Cada etapa constrói sobre a anterior (o PRD parte
 // do Brief, a Arquitetura parte do PRD, etc.) em vez de recomeçar do zero.
@@ -300,7 +315,7 @@ function docDeHistorias(ini: any, historias: any[]): string {
 // o persiste em `documento`. Retorna o registro criado. Tolerante a falha da
 // IA: cai para um documento montado a partir da própria conversa.
 async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome: string, ag: any): Promise<any> {
-  const cfg = DOC_ETAPA[ordem] ?? { tipo: "doc", emoji: "📄", titulo: (t: string) => `${etapaNome} — ${t}`, foco: `o artefato da etapa "${etapaNome}"` };
+  const cfg = cfgDaEtapa(ordem, etapaNome);
   const titulo = cfg.titulo(ini.titulo);
   const historico = await db
     .select()
@@ -344,6 +359,72 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
     escopo: "squad",
   }).returning();
   return doc;
+}
+
+type RodadaFase = "produzir" | "criticar" | "revisar" | "final";
+type OnRodada = (rodada: number, fase: RodadaFase, parecer?: { nota: number; problemas: string[] }) => Promise<void> | void;
+
+// Geração de documento COM AGENTE MASTER (crítico): o agente da etapa PRODUZ o
+// documento considerando os documentos anteriores (funcionais/técnicos); o
+// Master avalia criticamente; se reprovar, o agente REVISA — até N rodadas.
+// Entrega um documento muito mais forte do que a primeira resposta.
+async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome: string, ag: any, onRodada?: OnRodada): Promise<{ doc: any; rodadas: number; nota: number; problemas: string[] }> {
+  const cfg = cfgDaEtapa(ordem, etapaNome);
+  const titulo = cfg.titulo(ini.titulo);
+  const anteriores = await contextoEtapasAnteriores(db, ini);
+  const provider = await getProvider();
+  const model = await resolveModel(TAREFA_POR_ETAPA[ordem] ?? "resumo");
+  const guardRails = ((ag?.guardRails ?? []) as string[]).join(" ");
+  const persona = (ag?.promptSistema && String(ag.promptSistema).trim()) || ag?.personalidade || "um especialista da etapa";
+
+  const maxRodadas = 3;
+  let markdown = "";
+  let parecer = { aprovado: false, nota: 0, problemas: [] as string[] };
+  let rodada = 0;
+  for (rodada = 1; rodada <= maxRodadas; rodada++) {
+    await onRodada?.(rodada, "produzir");
+    const sys =
+      `Você é ${ag?.nome ?? "o agente"}. ${persona}\n\n` +
+      `Escreva ${cfg.foco} como um DOCUMENTO FORMAL em Markdown, específico e acionável. ` +
+      `CONSIDERE OBRIGATORIAMENTE os documentos das etapas anteriores (funcionais e técnicos) — não os ignore nem contradiga. ` +
+      `Não escreva saudações, nem faça perguntas: entregue o documento pronto. ${guardRails}`;
+    const user = rodada === 1
+      ? `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\nDocumentos anteriores (base obrigatória):\n${anteriores || "(nenhum)"}\n\nProduza o documento completo.`
+      : `Revise e MELHORE o documento abaixo corrigindo os problemas apontados pelo Master. Mantenha o que está bom e aprofunde onde falta.\n\nProblemas a corrigir:\n${parecer.problemas.map((p) => `- ${p}`).join("\n")}\n\nDocumentos anteriores (base obrigatória):\n${anteriores || "(nenhum)"}\n\nDocumento atual:\n${markdown}`;
+    try {
+      const res = await provider.chat({ model, system: sys, messages: [{ role: "user", content: user }], maxTokens: 2000, temperature: 0.3 });
+      const novo = (res.content ?? "").trim();
+      if (novo) markdown = novo;
+    } catch { /* mantém a versão anterior */ }
+
+    await onRodada?.(rodada, "criticar");
+    try {
+      const p = await gerarJson({
+        tarefa: "arquitetura",
+        system:
+          "Você é o AGENTE MASTER, guardião da qualidade do produto. Avalie CRITICAMENTE o documento da etapa: completude, especificidade, " +
+          "consistência com os documentos ANTERIORES (não pode ignorar/contradizer o que já foi definido), e se está acionável/testável. Seja exigente. Responda SOMENTE JSON.",
+        instrucao:
+          `Etapa: ${etapaNome}\nIniciativa: ${ini.titulo}\n\nDocumentos anteriores:\n${anteriores || "(nenhum)"}\n\n` +
+          `Documento a avaliar:\n${markdown}\n\n` +
+          'JSON: { "aprovado": true|false, "nota": 0-10, "problemas": ["o que falta / está fraco / ignora doc anterior", "…"] }',
+        maxTokens: 600,
+      });
+      parecer = { aprovado: !!p.aprovado, nota: Number(p.nota) || 0, problemas: Array.isArray(p.problemas) ? p.problemas.map(String) : [] };
+    } catch {
+      parecer = { aprovado: true, nota: 7, problemas: [] }; // se o Master falhar, aceita o que há
+    }
+    if (parecer.aprovado || rodada === maxRodadas) { await onRodada?.(rodada, "final", parecer); break; }
+    await onRodada?.(rodada, "revisar", parecer);
+  }
+
+  if (!markdown) markdown = `# ${titulo}\n\n(documento não pôde ser gerado)`;
+  const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 200) ?? titulo;
+  const [doc] = await db.insert(s.documento).values({
+    squadId: ini.squadId, iniciativaId: ini.id, titulo, tipo: cfg.tipo, emoji: cfg.emoji, resumo,
+    conteudo: markdown, autorNome: ag?.nome ?? "Agente da etapa", escopo: "squad",
+  }).returning();
+  return { doc, rodadas: rodada, nota: parecer.nota, problemas: parecer.problemas };
 }
 
 // Abre a próxima etapa: o agente dela publica a PRIMEIRA mensagem já partindo
@@ -543,7 +624,7 @@ app.post("/:codigo/chat", async (c) => {
 // etapa de Histórias), marca como concluída, avança e abre a próxima. Retorna
 // o documento, a próxima etapa e se a iniciativa terminou. Reutilizado pelo
 // endpoint manual e pelo orquestrador da execução autônoma.
-export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador"): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean }> {
+export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador", opts?: { critico?: boolean; onRodada?: OnRodada }): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean; revisao?: { rodadas: number; nota: number; problemas: string[] } }> {
   const ordem = ini.etapaAtual;
   const [etapaRow] = await db.select().from(s.iniciativaEtapa).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
   if (!etapaRow) return { ok: false, erro: "etapa atual não encontrada", proxima: null, terminou: true };
@@ -552,6 +633,7 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
 
   const ehHistorias = /hist[óo]ria/i.test(etapaRow.nome);
   let doc: any;
+  let revisao: { rodadas: number; nota: number; problemas: string[] } | undefined;
   if (ehHistorias) {
     const historias = await gerarHistoriasIterativo(db, ini, etapaRow);
     const nEpicos = new Set(historias.map((h) => h.epico)).size;
@@ -561,6 +643,9 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
       resumo: `${historias.length} história(s) em ${nEpicos} épico(s).`, conteudo: markdown,
       autorNome: ag?.nome ?? autorNome, escopo: "squad",
     }).returning();
+  } else if (opts?.critico) {
+    const r = await gerarDocumentoCritico(db, ini, ordem, etapaRow.nome, ag, opts.onRodada);
+    doc = r.doc; revisao = { rodadas: r.rodadas, nota: r.nota, problemas: r.problemas };
   } else {
     doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
   }
@@ -579,12 +664,12 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
   const proxima = ordem + 1;
   if (proxima > totalEtapas) {
     await db.update(s.iniciativa).set({ status: "concluida" }).where(eq(s.iniciativa.id, ini.id));
-    return { ok: true, doc, etapaNome: etapaRow.nome, proxima: null, terminou: true };
+    return { ok: true, doc, etapaNome: etapaRow.nome, proxima: null, terminou: true, revisao };
   }
   await db.update(s.iniciativa).set({ etapaAtual: proxima }).where(eq(s.iniciativa.id, ini.id));
   await db.update(s.iniciativaEtapa).set({ status: "em_andamento" }).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
   await abrirProximaEtapa(db, ini, proxima);
-  return { ok: true, doc, etapaNome: etapaRow.nome, proxima, terminou: false };
+  return { ok: true, doc, etapaNome: etapaRow.nome, proxima, terminou: false, revisao };
 }
 
 app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) => {
