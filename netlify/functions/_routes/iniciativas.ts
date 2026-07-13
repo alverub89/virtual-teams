@@ -382,12 +382,17 @@ app.post("/:codigo/chat", async (c) => {
     .innerJoin(s.tool, eq(s.agenteTool.toolId, s.tool.id))
     .where(eq(s.agenteTool.agenteId, ag.id));
 
+  const agTpls = await db.select().from(s.agenteTemplate).where(eq(s.agenteTemplate.agenteId, ag.id));
+  const tplsAg = (await db.select().from(s.template)).filter((t: any) => agTpls.some((l: any) => l.templateId === t.id));
+  const agCks = await db.select().from(s.agenteChecklist).where(eq(s.agenteChecklist.agenteId, ag.id));
+  const cksAg = (await db.select().from(s.checklist)).filter((ck: any) => agCks.some((l: any) => l.checklistId === ck.id));
   const contextoAnterior = await contextoEtapasAnteriores(db, ini);
   const instrucaoEtapa = etapaRow.instrucao ? `\n\nInstrução desta etapa (definida no método): ${etapaRow.instrucao}` : "";
+  const personaBase = (ag.promptSistema && ag.promptSistema.trim()) || ag.personalidade;
   const system = composeSystemPrompt({
     nome: ag.nome,
     personalidade:
-      `${ag.personalidade}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}` +
+      `${personaBase}\n\nContexto: etapa "${etapaRow.nome}" da iniciativa ${ini.codigo} — ${ini.titulo}. ${ini.descricao ?? ""}` +
       instrucaoEtapa +
       (contextoAnterior
         ? `\n\nVocê JÁ TEM ACESSO aos documentos das etapas anteriores desta iniciativa (abaixo). Use-os como base e NÃO recomece do zero nem peça informação que já está aqui — apenas confirme lacunas pontuais.\n\n${contextoAnterior}`
@@ -400,6 +405,8 @@ app.post("/:codigo/chat", async (c) => {
       "Você recebe os documentos das etapas anteriores no contexto; se perguntarem se tem acesso ao brief/PRD/etc., a resposta é SIM — referencie o conteúdo, não diga que não tem acesso.",
       ...((ag.guardRails ?? []) as string[]),
     ],
+    templates: tplsAg.map((t: any) => ({ nome: t.nome, conteudo: t.conteudo })),
+    checklists: cksAg.map((ck: any) => ({ nome: ck.nome, itens: ck.itens ?? [] })),
   });
 
   const historico = await db

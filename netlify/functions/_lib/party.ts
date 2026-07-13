@@ -10,8 +10,9 @@ import { resolveModel } from "../../../ai/router";
 async function fala(ag: any, topico: string, transcript: string): Promise<string> {
   const provider = await getProvider();
   const model = await resolveModel("resumo");
+  const persona = (ag.promptSistema && ag.promptSistema.trim()) || ag.personalidade;
   const system =
-    `Você é ${ag.nome} (${ag.papel}). ${ag.personalidade}\n` +
+    `Você é ${ag.nome} (${ag.papel}). ${persona}\n` +
     (Array.isArray(ag.guardRails) && ag.guardRails.length ? `Regras: ${ag.guardRails.join(" ")}\n` : "") +
     "Você está numa MESA-REDONDA com outros agentes. Fale a SUA contribuição em 2 a 4 frases, no seu papel, " +
     "em português. Pode concordar ou discordar dos colegas com argumento. Não repita o que já foi dito.";

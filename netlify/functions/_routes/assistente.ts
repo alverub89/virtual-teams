@@ -4,7 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema as s } from "../../../db/client";
 import { getProvider } from "../../../ai/provider";
 import { resolveModel } from "../../../ai/router";
-import { composeSystemPrompt } from "../../../ai/prompts";
+import { composeSystemPrompt, promptDoAgente } from "../../../ai/prompts";
 
 // Assistente livre da squad — bate-papo com um agente para tirar dúvidas ou
 // explorar ideias, sem estar preso a uma iniciativa. Conversa efêmera (o
@@ -33,10 +33,14 @@ app.post("/chat", async (c) => {
   const ag = (body.data.agenteId ? agentes.find((a: any) => a.id === body.data.agenteId) : agentes[0]) ?? agentes[0];
   if (!ag) return c.json({ error: "nenhum agente disponível" }, 400);
 
-  // Compõe o prompt de sistema com identidade + skills do agente.
+  // Compõe o prompt de sistema com identidade + skills + templates/checklists.
   const agSkills = await db.select().from(s.agenteSkill).where(eq(s.agenteSkill.agenteId, ag.id));
   const skills = (await db.select().from(s.skill)).filter((sk: any) => agSkills.some((l: any) => l.skillId === sk.id));
-  const system = composeSystemPrompt({
+  const agTpls = await db.select().from(s.agenteTemplate).where(eq(s.agenteTemplate.agenteId, ag.id));
+  const templates = (await db.select().from(s.template)).filter((t: any) => agTpls.some((l: any) => l.templateId === t.id));
+  const agCks = await db.select().from(s.agenteChecklist).where(eq(s.agenteChecklist.agenteId, ag.id));
+  const checklists = (await db.select().from(s.checklist)).filter((ck: any) => agCks.some((l: any) => l.checklistId === ck.id));
+  const system = promptDoAgente(ag, {
     nome: ag.nome,
     personalidade: ag.personalidade,
     skills: skills.map((sk: any) => ({ nome: sk.nome, instrucoes: sk.instrucoes })),
@@ -44,7 +48,10 @@ app.post("/chat", async (c) => {
     guardRails: [
       "Este é um espaço de exploração e dúvidas — nenhuma ação é executada aqui.",
       "Seja direto e útil; quando não souber, diga.",
+      ...((ag.guardRails ?? []) as string[]),
     ],
+    templates: templates.map((t: any) => ({ nome: t.nome, conteudo: t.conteudo })),
+    checklists: checklists.map((ck: any) => ({ nome: ck.nome, itens: ck.itens ?? [] })),
   });
 
   const provider = await getProvider();

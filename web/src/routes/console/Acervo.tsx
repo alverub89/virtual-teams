@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, del, post } from "../../lib/api";
+import { api, del, post, put } from "../../lib/api";
 import { Button, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
@@ -41,7 +41,33 @@ export default function Acervo() {
   const delTemplate = useMutation({ mutationFn: (id: string) => del(`/console/acervo/templates/${id}`), onSuccess: () => { inval(); toast("🗑️ Template removido"); } });
   const delChecklist = useMutation({ mutationFn: (id: string) => del(`/console/acervo/checklists/${id}`), onSuccess: () => { inval(); toast("🗑️ Checklist removido"); } });
 
-  const [verTpl, setVerTpl] = useState<Template | null>(null);
+  // Editor de template (criar/editar)
+  const [editTpl, setEditTpl] = useState<Template | "novo" | null>(null);
+  const [tNome, setTNome] = useState(""); const [tTipo, setTTipo] = useState("generico"); const [tEmoji, setTEmoji] = useState("📄"); const [tDesc, setTDesc] = useState(""); const [tConteudo, setTConteudo] = useState("");
+  const abrirTpl = (t: Template | "novo") => {
+    setEditTpl(t);
+    if (t === "novo") { setTNome(""); setTTipo("generico"); setTEmoji("📄"); setTDesc(""); setTConteudo("# {{titulo}}\n\n"); }
+    else { setTNome(t.nome); setTTipo(t.tipo); setTEmoji(t.emoji ?? "📄"); setTDesc(t.descricao ?? ""); setTConteudo(t.conteudo); }
+  };
+  const salvarTpl = useMutation({
+    mutationFn: () => { const body = { nome: tNome, tipo: tTipo, emoji: tEmoji, descricao: tDesc, conteudo: tConteudo }; return editTpl === "novo" ? post("/console/acervo/templates", body) : put(`/console/acervo/templates/${(editTpl as Template).id}`, body); },
+    onSuccess: () => { inval(); setEditTpl(null); toast("💾 Template salvo"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
+
+  // Editor de checklist (criar/editar)
+  const [editCk, setEditCk] = useState<Checklist | "novo" | null>(null);
+  const [cNome, setCNome] = useState(""); const [cCat, setCCat] = useState("generico"); const [cEmoji, setCEmoji] = useState("✅"); const [cDesc, setCDesc] = useState(""); const [cItens, setCItens] = useState("");
+  const abrirCk = (ck: Checklist | "novo") => {
+    setEditCk(ck);
+    if (ck === "novo") { setCNome(""); setCCat("generico"); setCEmoji("✅"); setCDesc(""); setCItens(""); }
+    else { setCNome(ck.nome); setCCat(ck.categoria); setCEmoji(ck.emoji ?? "✅"); setCDesc(ck.descricao ?? ""); setCItens(ck.itens.join("\n")); }
+  };
+  const salvarCk = useMutation({
+    mutationFn: () => { const body = { nome: cNome, categoria: cCat, emoji: cEmoji, descricao: cDesc, itens: cItens.split("\n").map((x) => x.trim()).filter(Boolean) }; return editCk === "novo" ? post("/console/acervo/checklists", body) : put(`/console/acervo/checklists/${(editCk as Checklist).id}`, body); },
+    onSuccess: () => { inval(); setEditCk(null); toast("💾 Checklist salvo"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   return (
     <>
@@ -86,7 +112,7 @@ export default function Acervo() {
         </div>
       </Secao>
 
-      <Secao titulo={`Templates (${data?.templates.length ?? 0})`}>
+      <Secao titulo={`Templates (${data?.templates.length ?? 0})`} extra={<Button onClick={() => abrirTpl("novo")}>+ Novo template</Button>}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
           {data?.templates.map((t) => (
             <div key={t.id} className="card">
@@ -95,7 +121,7 @@ export default function Acervo() {
               </div>
               <p className="sub" style={{ margin: "4px 0 8px", fontSize: 12.5 }}>{t.descricao}</p>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className="btn" style={{ fontSize: 12 }} onClick={() => setVerTpl(t)}>Ver</button>
+                <button className="btn" style={{ fontSize: 12 }} onClick={() => abrirTpl(t)}>Editar</button>
                 <button className="btn" style={{ fontSize: 12 }} onClick={() => confirm("Remover template?") && delTemplate.mutate(t.id)}>🗑️</button>
               </div>
             </div>
@@ -103,7 +129,7 @@ export default function Acervo() {
         </div>
       </Secao>
 
-      <Secao titulo={`Checklists (${data?.checklists.length ?? 0})`}>
+      <Secao titulo={`Checklists (${data?.checklists.length ?? 0})`} extra={<Button onClick={() => abrirCk("novo")}>+ Novo checklist</Button>}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
           {data?.checklists.map((ck) => (
             <div key={ck.id} className="card">
@@ -113,7 +139,10 @@ export default function Acervo() {
               <ul style={{ margin: "6px 0 8px", paddingLeft: 18, fontSize: 12.5 }}>
                 {ck.itens.slice(0, 6).map((it, i) => <li key={i} className="sub">{it}</li>)}
               </ul>
-              <button className="btn" style={{ fontSize: 12 }} onClick={() => confirm("Remover checklist?") && delChecklist.mutate(ck.id)}>🗑️</button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn" style={{ fontSize: 12 }} onClick={() => abrirCk(ck)}>Editar</button>
+                <button className="btn" style={{ fontSize: 12 }} onClick={() => confirm("Remover checklist?") && delChecklist.mutate(ck.id)}>🗑️</button>
+              </div>
             </div>
           ))}
         </div>
@@ -134,10 +163,45 @@ export default function Acervo() {
         </Modal>
       )}
 
-      {verTpl && (
-        <Modal title={`${verTpl.emoji ?? "📄"} ${verTpl.nome}`} subtitle={verTpl.descricao ?? undefined} onClose={() => setVerTpl(null)}
-          foot={<Button onClick={() => setVerTpl(null)}>Fechar</Button>}>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12.5, background: "var(--card-2, rgba(127,127,127,.1))", padding: 12, borderRadius: 8 }}>{verTpl.conteudo}</pre>
+      {editTpl && (
+        <Modal title={editTpl === "novo" ? "Novo template" : "Editar template"} onClose={() => setEditTpl(null)}
+          foot={<><Button onClick={() => setEditTpl(null)}>Cancelar</Button><Button variant="primary" onClick={() => tNome.length >= 2 && tConteudo.length >= 1 && salvarTpl.mutate()}>{salvarTpl.isPending ? "Salvando…" : "Salvar"}</Button></>}>
+          <div className="fld-row">
+            <Fld label="Nome"><input className="in" value={tNome} onChange={(e) => setTNome(e.target.value)} /></Fld>
+            <Fld label="Emoji"><input className="in" value={tEmoji} onChange={(e) => setTEmoji(e.target.value)} maxLength={2} /></Fld>
+          </div>
+          <div className="fld-row">
+            <Fld label="Tipo">
+              <select className="in" value={tTipo} onChange={(e) => setTTipo(e.target.value)}>
+                {["prd", "arquitetura", "story", "sdd", "generico"].map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Fld>
+            <Fld label="Descrição"><input className="in" value={tDesc} onChange={(e) => setTDesc(e.target.value)} /></Fld>
+          </div>
+          <Fld label="Conteúdo (markdown, placeholders {{...}})">
+            <textarea className="in" rows={12} value={tConteudo} onChange={(e) => setTConteudo(e.target.value)} style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5 }} />
+          </Fld>
+        </Modal>
+      )}
+
+      {editCk && (
+        <Modal title={editCk === "novo" ? "Novo checklist" : "Editar checklist"} onClose={() => setEditCk(null)}
+          foot={<><Button onClick={() => setEditCk(null)}>Cancelar</Button><Button variant="primary" onClick={() => cNome.length >= 2 && salvarCk.mutate()}>{salvarCk.isPending ? "Salvando…" : "Salvar"}</Button></>}>
+          <div className="fld-row">
+            <Fld label="Nome"><input className="in" value={cNome} onChange={(e) => setCNome(e.target.value)} /></Fld>
+            <Fld label="Emoji"><input className="in" value={cEmoji} onChange={(e) => setCEmoji(e.target.value)} maxLength={2} /></Fld>
+          </div>
+          <div className="fld-row">
+            <Fld label="Categoria">
+              <select className="in" value={cCat} onChange={(e) => setCCat(e.target.value)}>
+                {["dor", "dod", "revisao", "seguranca", "generico"].map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Fld>
+            <Fld label="Descrição"><input className="in" value={cDesc} onChange={(e) => setCDesc(e.target.value)} /></Fld>
+          </div>
+          <Fld label="Itens (um por linha)">
+            <textarea className="in" rows={8} value={cItens} onChange={(e) => setCItens(e.target.value)} placeholder="Critério verificável 1&#10;Critério verificável 2" />
+          </Fld>
         </Modal>
       )}
     </>

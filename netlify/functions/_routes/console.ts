@@ -5,7 +5,7 @@ import { setCookie } from "hono/cookie";
 import { getDb, schema as s } from "../../../db/client";
 import { rbac } from "../_mw/rbac";
 import { audit } from "../_lib/audit";
-import { composeSystemPrompt } from "../../../ai/prompts";
+import { composeSystemPrompt, promptDoAgente } from "../../../ai/prompts";
 import { signSession, sessionCookieName, cookieOpts } from "../_mw/auth";
 import { meDaPessoa } from "./auth";
 
@@ -112,29 +112,41 @@ app.get("/agentes/:id", async (c) => {
   if (!a) return c.json({ error: "agente não encontrado" }, 404);
   const skills = await db.select().from(s.skill).orderBy(asc(s.skill.nome));
   const tools = await db.select().from(s.tool).orderBy(asc(s.tool.nome));
+  const templates = await db.select().from(s.template).orderBy(asc(s.template.nome));
+  const checklists = await db.select().from(s.checklist).orderBy(asc(s.checklist.nome));
   const mcps = await db.select().from(s.conexaoMcp);
   const agSkills = await db.select().from(s.agenteSkill).where(eq(s.agenteSkill.agenteId, a.id));
   const agTools = await db.select().from(s.agenteTool).where(eq(s.agenteTool.agenteId, a.id));
+  const agTpls = await db.select().from(s.agenteTemplate).where(eq(s.agenteTemplate.agenteId, a.id));
+  const agCks = await db.select().from(s.agenteChecklist).where(eq(s.agenteChecklist.agenteId, a.id));
 
   const minhasSkills = skills.filter((sk: any) => agSkills.some((l: any) => l.skillId === sk.id));
   const minhasTools = tools.filter((t: any) => agTools.some((l: any) => l.toolId === t.id));
-  const prompt = composeSystemPrompt({
+  const meusTpls = templates.filter((t: any) => agTpls.some((l: any) => l.templateId === t.id));
+  const meusCks = checklists.filter((ck: any) => agCks.some((l: any) => l.checklistId === ck.id));
+  const prompt = promptDoAgente(a, {
     nome: a.nome,
     personalidade: a.personalidade,
     skills: minhasSkills.map((sk: any) => ({ nome: sk.nome, instrucoes: sk.instrucoes })),
     tools: minhasTools.map((t: any) => ({ nome: t.nome, descricao: t.descricao ?? "", permissao: t.permissao })),
     guardRails: a.guardRails ?? [],
+    templates: meusTpls.map((t: any) => ({ nome: t.nome, conteudo: t.conteudo })),
+    checklists: meusCks.map((ck: any) => ({ nome: ck.nome, itens: ck.itens ?? [] })),
   });
 
   return c.json({
     ...a,
     skillIds: agSkills.map((l: any) => l.skillId),
     toolIds: agTools.map((l: any) => l.toolId),
+    templateIds: agTpls.map((l: any) => l.templateId),
+    checklistIds: agCks.map((l: any) => l.checklistId),
     catalogoSkills: skills,
     catalogoTools: tools.map((t: any) => ({
       ...t,
       mcp: mcps.find((m: any) => m.id === t.conexaoMcpId)?.nome ?? "interno",
     })),
+    catalogoTemplates: templates.map((t: any) => ({ id: t.id, nome: t.nome, emoji: t.emoji, tipo: t.tipo })),
+    catalogoChecklists: checklists.map((ck: any) => ({ id: ck.id, nome: ck.nome, emoji: ck.emoji, categoria: ck.categoria })),
     promptGerado: prompt,
   });
 });
@@ -147,9 +159,12 @@ const AtualizarAgente = z.object({
   nivelModelo: z.enum(["avancado", "intermediario", "leve"]).optional(),
   maxTokens: z.number().int().min(256).max(64000).optional(),
   guardRails: z.array(z.string()).optional(),
+  promptSistema: z.string().nullable().optional(),
   ativo: z.boolean().optional(),
   skillIds: z.array(z.string().uuid()).optional(),
   toolIds: z.array(z.string().uuid()).optional(),
+  templateIds: z.array(z.string().uuid()).optional(),
+  checklistIds: z.array(z.string().uuid()).optional(),
 });
 
 app.put("/agentes/:id", rbac("configurar_plataforma"), async (c) => {
@@ -158,7 +173,8 @@ app.put("/agentes/:id", rbac("configurar_plataforma"), async (c) => {
   if (!body.success) return c.json({ error: body.error.flatten() }, 400);
   const id = c.req.param("id");
   const db = await getDb();
-  const { skillIds, toolIds, ...campos } = body.data;
+  const { skillIds, toolIds, templateIds, checklistIds, ...campos } = body.data;
+  if ("promptSistema" in campos && !campos.promptSistema?.trim()) campos.promptSistema = null; // vazio = restaurar padrão
 
   if (Object.keys(campos).length > 0)
     await db.update(s.agente).set(campos).where(eq(s.agente.id, id));
@@ -171,6 +187,16 @@ app.put("/agentes/:id", rbac("configurar_plataforma"), async (c) => {
     await db.delete(s.agenteTool).where(eq(s.agenteTool.agenteId, id));
     if (toolIds.length)
       await db.insert(s.agenteTool).values(toolIds.map((toolId) => ({ agenteId: id, toolId })));
+  }
+  if (templateIds) {
+    await db.delete(s.agenteTemplate).where(eq(s.agenteTemplate.agenteId, id));
+    if (templateIds.length)
+      await db.insert(s.agenteTemplate).values(templateIds.map((templateId) => ({ agenteId: id, templateId })));
+  }
+  if (checklistIds) {
+    await db.delete(s.agenteChecklist).where(eq(s.agenteChecklist.agenteId, id));
+    if (checklistIds.length)
+      await db.insert(s.agenteChecklist).values(checklistIds.map((checklistId) => ({ agenteId: id, checklistId })));
   }
   await audit(me, "atualizar_agente", `agente:${id}`, campos);
   return c.json({ ok: true });

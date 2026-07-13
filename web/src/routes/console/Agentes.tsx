@@ -112,11 +112,16 @@ interface AgenteDetalhe {
   nivelModelo: string;
   maxTokens: number;
   guardRails: string[];
+  promptSistema: string | null;
   ativo: boolean;
   skillIds: string[];
   toolIds: string[];
+  templateIds: string[];
+  checklistIds: string[];
   catalogoSkills: { id: string; nome: string; emoji: string | null; descricao: string | null }[];
   catalogoTools: { id: string; nome: string; descricao: string | null; permissao: string; mcp: string }[];
+  catalogoTemplates: { id: string; nome: string; emoji: string | null; tipo: string }[];
+  catalogoChecklists: { id: string; nome: string; emoji: string | null; categoria: string }[];
   promptGerado: string;
 }
 
@@ -136,6 +141,9 @@ export function AgenteEdit() {
   const [guardRails, setGuardRails] = useState("");
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [toolIds, setToolIds] = useState<string[]>([]);
+  const [templateIds, setTemplateIds] = useState<string[]>([]);
+  const [checklistIds, setChecklistIds] = useState<string[]>([]);
+  const [promptSistema, setPromptSistema] = useState("");
 
   useEffect(() => {
     if (!agente) return;
@@ -145,6 +153,9 @@ export function AgenteEdit() {
     setGuardRails((agente.guardRails ?? []).join("\n"));
     setSkillIds(agente.skillIds);
     setToolIds(agente.toolIds);
+    setTemplateIds(agente.templateIds ?? []);
+    setChecklistIds(agente.checklistIds ?? []);
+    setPromptSistema(agente.promptSistema ?? "");
   }, [agente?.id]);
 
   const salvar = useMutation({
@@ -152,7 +163,8 @@ export function AgenteEdit() {
       personalidade, nivelModelo,
       maxTokens: Math.max(256, Math.min(64000, parseInt(maxTokens, 10) || 4096)),
       guardRails: guardRails.split("\n").map((r) => r.trim()).filter(Boolean),
-      skillIds, toolIds,
+      promptSistema: promptSistema.trim() || null,
+      skillIds, toolIds, templateIds, checklistIds,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agente", id] });
@@ -233,14 +245,48 @@ export function AgenteEdit() {
               </label>
             ))}
           </div>
+          <div className="card card-pad">
+            <h3>Templates</h3>
+            <p className="sub" style={{ marginBottom: 8 }}>modelos que o agente usa ao produzir documentos</p>
+            {agente.catalogoTemplates.length === 0 && <p className="sub">Nenhum template no acervo — crie em <Link to="/console/acervo">Acervo</Link>.</p>}
+            {agente.catalogoTemplates.map((t) => (
+              <label key={t.id} className="tool-pick" style={{ cursor: editavel ? "pointer" : "default" }}>
+                <input type="checkbox" checked={templateIds.includes(t.id)} disabled={!editavel} onChange={() => toggle(templateIds, setTemplateIds, t.id)} />
+                <div><div className="tp-name">{t.emoji ?? "📄"} {t.nome}</div><div className="tp-src">{t.tipo}</div></div>
+              </label>
+            ))}
+          </div>
+          <div className="card card-pad">
+            <h3>Checklists</h3>
+            <p className="sub" style={{ marginBottom: 8 }}>listas de verificação que o agente aplica</p>
+            {agente.catalogoChecklists.length === 0 && <p className="sub">Nenhum checklist no acervo — crie em <Link to="/console/acervo">Acervo</Link>.</p>}
+            {agente.catalogoChecklists.map((ck) => (
+              <label key={ck.id} className="tool-pick" style={{ cursor: editavel ? "pointer" : "default" }}>
+                <input type="checkbox" checked={checklistIds.includes(ck.id)} disabled={!editavel} onChange={() => toggle(checklistIds, setChecklistIds, ck.id)} />
+                <div><div className="tp-name">{ck.emoji ?? "✅"} {ck.nome}</div><div className="tp-src">{ck.categoria}</div></div>
+              </label>
+            ))}
+          </div>
         </div>
         <div className="card card-pad" style={{ position: "sticky", top: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h3 style={{ flex: 1 }}>Prompt de sistema (gerado)</h3>
-            <Chip>identidade + skills + tools + guard-rails</Chip>
+            <h3 style={{ flex: 1 }}>Prompt de sistema</h3>
+            <Chip>{promptSistema.trim() ? "personalizado" : "automático"}</Chip>
           </div>
-          <p className="sub" style={{ marginBottom: 10 }}>composição automática — é exatamente o que o modelo recebe</p>
-          <div className="prompt-box">{agente.promptGerado}</div>
+          {promptSistema.trim() ? (
+            <p className="sub" style={{ marginBottom: 10 }}>override manual — substitui a identidade composta (skills, tools, templates, checklists e guard-rails continuam anexados)</p>
+          ) : (
+            <p className="sub" style={{ marginBottom: 10 }}>composição automática — é exatamente o que o modelo recebe. Edite abaixo para personalizar.</p>
+          )}
+          <textarea
+            className="in" rows={16} disabled={!editavel}
+            value={promptSistema || agente.promptGerado}
+            onChange={(e) => setPromptSistema(e.target.value)}
+            style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5, lineHeight: 1.5 }}
+          />
+          {editavel && promptSistema.trim() && (
+            <button className="btn" style={{ marginTop: 8 }} onClick={() => setPromptSistema("")}>↺ Restaurar prompt automático</button>
+          )}
         </div>
       </div>
     </>

@@ -127,6 +127,13 @@
       "when": 1784120000000,
       "tag": "0017_bmad_acervo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784130000000,
+      "tag": "0018_agente_prompt_acervo",
+      "breakpoints": true
     }
   ]
 }
