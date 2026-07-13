@@ -21,7 +21,7 @@ export default function Party() {
   const [aberto, setAberto] = useState(false);
   const [topico, setTopico] = useState("");
   const [sel, setSel] = useState<string[]>([]);
-  const [rounds, setRounds] = useState(2);
+  const [rounds, setRounds] = useState(3);
   const toggle = (id: string) => setSel((c) => (c.includes(id) ? c.filter((x) => x !== id) : c.length < 5 ? [...c, id] : c));
 
   const iniciar = useMutation({
@@ -34,7 +34,7 @@ export default function Party() {
     <>
       <PageHead
         title="Mesa-redonda"
-        description="Coloque vários agentes para debaterem um tópico entre si — o orquestrador conduz os turnos e fecha com uma síntese."
+        description="Vários agentes debatem em turnos encadeados — cada um reage ao anterior e refina uma proposta viva. A mesa converge e fecha com uma decisão concreta."
         actions={<Button variant="primary" onClick={() => { setSel(data?.agentes.slice(0, 3).map((a) => a.id) ?? []); setAberto(true); }}>+ Nova mesa</Button>}
       />
       {!data?.sessoes.length && (
@@ -71,10 +71,11 @@ export default function Party() {
               })}
             </div>
           </Fld>
-          <Fld label="Rodadas">
-            <select className="in" style={{ maxWidth: 120 }} value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
-              <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
+          <Fld label="Rodadas (máx.)">
+            <select className="in" style={{ maxWidth: 140 }} value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
+              <option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option>
             </select>
+            <p className="sub" style={{ margin: "6px 0 0", fontSize: 11.5 }}>A mesa encerra antes se convergir. A cada rodada a proposta fica mais concreta.</p>
           </Fld>
         </Modal>
       )}
@@ -104,15 +105,29 @@ export function PartySessao() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {data.turnos.map((t) => (
-          <div key={t.ordem} className="card" style={{ display: "flex", gap: 12, alignItems: "start" }}>
-            <span className="avatar" style={{ background: "var(--accent-deep, #1e40af)", flexShrink: 0 }}>{t.emoji ?? "🤖"}</span>
-            <div>
-              <b>{t.agenteNome}</b>
-              <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{t.conteudo}</p>
+        {data.turnos.map((t) => {
+          const consolidacao = t.agenteNome.startsWith("Consolidação");
+          if (consolidacao) {
+            return (
+              <div key={t.ordem} className="card" style={{ background: "#f5f3ff", border: "1px solid #ddd6fe" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span>🧩</span><b style={{ color: "#5b21b6" }}>{t.agenteNome}</b>
+                  <span className="sub" style={{ fontSize: 11.5 }}>· proposta viva</span>
+                </div>
+                <div style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.55, fontSize: 13 }}>{t.conteudo}</div>
+              </div>
+            );
+          }
+          return (
+            <div key={t.ordem} className="card" style={{ display: "flex", gap: 12, alignItems: "start" }}>
+              <span className="avatar" style={{ background: "var(--accent-deep, #1e40af)", flexShrink: 0 }}>{t.emoji ?? "🤖"}</span>
+              <div>
+                <b>{t.agenteNome}</b>
+                <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{t.conteudo}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {s.sintese && (

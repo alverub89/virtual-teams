@@ -26,11 +26,11 @@ app.post("/", async (c) => {
     titulo: z.string().max(160).optional(),
     topico: z.string().min(4).max(2000),
     agenteIds: z.array(z.string().uuid()).min(2).max(5),
-    rounds: z.number().int().min(1).max(3).optional(),
+    rounds: z.number().int().min(2).max(5).optional(),
   }).safeParse(await c.req.json());
   if (!body.success) return c.json({ error: "escolha um tópico e de 2 a 5 agentes" }, 400);
   const db = await getDb();
-  const rounds = body.data.rounds ?? 2;
+  const rounds = body.data.rounds ?? 3;
   const [sess] = await db.insert(s.partySessao).values({
     squadId: me.squadId ?? null, titulo: body.data.titulo || body.data.topico.slice(0, 80),
     topico: body.data.topico, status: "em_andamento", progresso: "na fila…", criadoPor: me.id,

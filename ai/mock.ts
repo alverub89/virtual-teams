@@ -243,12 +243,51 @@ function talvezSugCapacidade(req: ChatRequest): string | null {
   });
 }
 
-// Mesa-redonda (party): fala curta no papel do agente.
+// Consolidador da mesa (facilitador): devolve JSON com a proposta viva.
+function talvezPartyConsolidar(req: ChatRequest): string | null {
+  if (!/Consolide o debate/i.test(req.system)) return null;
+  const user = req.messages?.[0]?.content ?? "";
+  const jaTinha = !/Proposta anterior:\s*\n\(vazia\)/i.test(user);
+  const proposta =
+    "**Núcleo:** um jogo casual de 1 toque, sessões de ~30s.\n" +
+    "**Mecânica:** timing/precisão com dificuldade crescente e placar imediato.\n" +
+    "**Loop viral:** placar compartilhável + desafio direto a um amigo.\n" +
+    "**Stack/MVP:** HTML5 + Canvas, sem backend na v0 (score local + link).";
+  return JSON.stringify({
+    proposta,
+    convergiu: jaTinha,
+    pendencias: jaTinha ? [] : ["qual é a mecânica-núcleo exata (nome do jogo)?"],
+  });
+}
+
+// Resultado final da mesa (facilitador): markdown acionável.
+function talvezPartyResultado(req: ChatRequest): string | null {
+  if (!/RESULTADO final/i.test(req.system)) return null;
+  return (
+    "## 🎯 Decisão\n" +
+    "**TapDrop** — jogo casual de 1 toque. Você solta blocos no ritmo certo; errar encerra. Sessão de ~30s, placar imediato e compartilhável, com desafio direto a um amigo. HTML5 + Canvas, score local, sem backend na v0.\n\n" +
+    "## ✅ Acordos\n- 1 toque, sessões curtas, dificuldade crescente\n- Loop viral via placar compartilhável + desafio 1:1\n- MVP sem backend (score local + link)\n\n" +
+    "## ⚖️ Divergências em aberto\n- Leaderboard global agora ou depois da tração inicial\n\n" +
+    "## ▶️ Próximos passos\n1. Protótipo jogável do loop-núcleo (Dev)\n2. Copy do card de compartilhamento (PM)\n3. Meta de retenção D1 e evento de share (Analista)"
+  );
+}
+
+// Mesa-redonda (party): fala curta que reage ao último colega e é concreta.
 function talvezParty(req: ChatRequest): string | null {
   if (!/MESA-REDONDA/i.test(req.system)) return null;
   const nome = req.system.match(/Você é ([^(]+)\(/)?.[1]?.trim() ?? "Agente";
-  const papel = req.system.match(/\(([^)]+)\)/)?.[1] ?? "";
-  return `Do meu ponto de vista como ${papel || nome}, o ponto central é equilibrar valor e risco. Concordo com o que foi levantado, mas sugiro priorizar o menor incremento que já entrega resultado e medir antes de expandir.`;
+  const papel = (req.system.match(/\(([^)]+)\)/)?.[1] ?? "").toLowerCase();
+  const ultimo = (req.messages?.[0]?.content ?? "").match(/Último a falar — ([^:]+): "([^"]+)"/);
+  const ref = ultimo ? `Pegando o que ${ultimo[1].trim()} disse, ` : "Para fixar o núcleo, ";
+  if (/analista|dados|business/.test(papel))
+    return `${ref}proponho a meta: retenção D1 ≥ 25% e taxa de share ≥ 8%. Sem loop compartilhável medível, não vira viral — então o placar tem que gerar um link com prova social.`;
+  if (/product|pm|produto/.test(papel))
+    return `${ref}corto escopo pro núcleo: 1 toque, sessão de 30s, placar na hora. Fora do MVP: contas, loja, múltiplos modos. O que entra é só o que aumenta share.`;
+  if (/arquitet|tech/.test(papel))
+    return `${ref}HTML5 + Canvas puro, sem backend na v0 — score no localStorage e compartilhamento por URL com o placar embutido. Assim carrega em <1s e escala de graça.`;
+  if (/dev|desenvol|eng/.test(papel))
+    return `${ref}fecho o loop-núcleo primeiro: input → colisão → game over → card de share. Um protótipo jogável em Canvas com 3 casos de teste (acerto, erro, recorde) antes de qualquer arte.`;
+  return `${ref}concordo com o núcleo de 1 toque e reforço: cada partida precisa terminar num convite a compartilhar, senão não há viralização.`;
 }
 
 function responder(req: ChatRequest): string {
@@ -258,6 +297,10 @@ function responder(req: ChatRequest): string {
   if (docF) return docF;
   const sugCap = talvezSugCapacidade(req);
   if (sugCap) return sugCap;
+  const partyCons = talvezPartyConsolidar(req);
+  if (partyCons) return partyCons;
+  const partyRes = talvezPartyResultado(req);
+  if (partyRes) return partyRes;
   const party = talvezParty(req);
   if (party) return party;
   const sddDoc = talvezSddDoc(req);
