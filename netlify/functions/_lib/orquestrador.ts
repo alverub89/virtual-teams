@@ -34,10 +34,15 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
       ordem += 1;
       const rev = r.revisao;
       const nota = rev ? ` · Master ${rev.nota}/10 em ${rev.rodadas} rodada(s)` : "";
+      const itens = [
+        r.doc?.resumo,
+        ...(rev && rev.problemas.length && rev.nota < 8 ? [`Master apontou: ${rev.problemas.slice(0, 2).join("; ")}`] : []),
+        ...(r.sddCount ? [`🧩 ${r.sddCount} SDD(s) gerados na sequência`] : []),
+      ].filter(Boolean) as string[];
       await db.insert(s.execucaoPasso).values({
         execucaoId: execId, ordem, nome: nomeEtapa, agenteNome: `🎭 Orquestrador${nota}`, tipo: "automatica",
         status: r.ok ? "concluido" : "rejeitado",
-        saida: r.ok ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens: [r.doc.resumo, ...(rev && rev.problemas.length && rev.nota < 8 ? [`Master apontou: ${rev.problemas.slice(0, 2).join("; ")}`] : [])].filter(Boolean) as string[] } : { resumo: r.erro ?? "falha" },
+        saida: r.ok ? { resumo: `${r.doc.emoji ?? "📄"} ${r.doc.titulo}`, itens } : { resumo: r.erro ?? "falha" },
         concluidoEm: new Date(),
       });
       if (!r.ok) throw new Error(r.erro ?? "falha ao concluir etapa");

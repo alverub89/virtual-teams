@@ -237,46 +237,58 @@ async function contextoEtapasAnteriores(db: any, ini: any, maxCharsPorDoc = 1400
 // cada épico, quebra em várias HISTÓRIAS INVEST testáveis (com critérios de
 // aceite e estimativa). Salva como registros reais no backlog. Retorna as
 // histórias criadas para montar o documento da etapa.
+const normTitulo = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
 async function gerarHistoriasIterativo(db: any, ini: any, etapa?: any): Promise<any[]> {
   const contexto = await contextoEtapasAnteriores(db, ini);
   const base = `Iniciativa ${ini.codigo} — ${ini.titulo}\n${ini.descricao ?? ""}\n\n${contexto || "(sem documentos anteriores)"}`;
   const extra = etapa?.instrucao ? `\n\nOrientação da squad para esta etapa: ${etapa.instrucao}` : "";
   const minH = etapa?.config?.minSaidas ?? 2;
-  const maxH = etapa?.config?.maxSaidas ?? 5;
+  const maxH = etapa?.config?.maxSaidas ?? 4;
+  const LIMITE = 16; // teto de histórias para não inflar o backlog
 
-  // 1) Épicos
+  // 1) Épicos — DISTINTOS e não sobrepostos.
   let epicos: { nome: string; descricao?: string }[] = [];
   try {
     const plano = await gerarJson({
       tarefa: "historias",
-      system: "Você é um Product Owner. A partir do contexto da iniciativa, identifique os ÉPICOS (fatias de valor) que a compõem. Responda SOMENTE JSON.",
-      instrucao: `${base}\n\nFormato JSON: { "epicos": [{ "nome": "...", "descricao": "..." }] } (3 a 6 épicos, do mais essencial ao complementar).`,
+      system: "Você é um Product Owner. Identifique os ÉPICOS (fatias de valor) da iniciativa. Os épicos devem ser DISTINTOS e NÃO se sobrepor — cada um cobre um tema diferente; não crie dois épicos sobre a mesma coisa. Responda SOMENTE JSON.",
+      instrucao: `${base}\n\nFormato JSON: { "epicos": [{ "nome": "...", "descricao": "..." }] } (3 a 5 épicos, sem sobreposição, do mais essencial ao complementar).`,
       maxTokens: 900,
     });
-    if (Array.isArray(plano?.epicos)) epicos = plano.epicos.filter((e: any) => e?.nome).slice(0, 6);
+    if (Array.isArray(plano?.epicos)) epicos = plano.epicos.filter((e: any) => e?.nome).slice(0, 5);
   } catch { /* segue com fallback */ }
   if (!epicos.length) epicos = [{ nome: ini.titulo, descricao: ini.descricao ?? "" }];
 
-  // 2) Histórias por épico (iteração)
+  // 2) Histórias por épico — passando as já criadas para NÃO repetir + dedup.
   const criadas: any[] = [];
+  const vistos = new Set<string>();
   let seq = (await db.select().from(s.historia)).filter((h: any) => h.iniciativaId === ini.id).length;
   let ordem = seq;
   for (const ep of epicos) {
+    if (criadas.length >= LIMITE) break;
+    const jaTem = criadas.length
+      ? `\n\nHistórias JÁ criadas em outros épicos (NÃO repita nenhuma destas; gere apenas o que é NOVO e específico DESTE épico):\n${criadas.map((h) => `- ${h.titulo}`).join("\n")}`
+      : "";
     let hs: any[] = [];
     try {
       const r = await gerarJson({
         tarefa: "historias",
         system:
-          "Você é um Product Owner/Scrum Master. Quebre o ÉPICO em HISTÓRIAS de usuário no formato INVEST, cada uma TESTÁVEL. Responda SOMENTE JSON." + extra,
+          "Você é um Product Owner/Scrum Master. Quebre o ÉPICO em HISTÓRIAS de usuário INVEST, cada uma TESTÁVEL, específicas e SEM repetir histórias de outros épicos. Responda SOMENTE JSON." + extra,
         instrucao:
-          `${base}\n\nÉpico: ${ep.nome}\n${ep.descricao ?? ""}\n\n` +
-          'Formato JSON: { "historias": [{ "titulo": "curto", "descricao": "Como <persona>, quero <ação> para <valor>", ' +
-          `"criteriosAceite": ["Dado/Quando/Então…", "…"], "pontos": 1|2|3|5|8 }] } (${minH} a ${maxH} histórias, independentes e pequenas).`,
+          `${base}\n\nÉpico: ${ep.nome}\n${ep.descricao ?? ""}${jaTem}\n\n` +
+          'Formato JSON: { "historias": [{ "titulo": "curto e único", "descricao": "Como <persona>, quero <ação> para <valor>", ' +
+          `"criteriosAceite": ["Dado/Quando/Então…", "…"], "pontos": 1|2|3|5|8 }] } (${minH} a ${maxH} histórias, independentes, pequenas e distintas).`,
         maxTokens: 1400,
       });
       if (Array.isArray(r?.historias)) hs = r.historias.filter((h: any) => h?.titulo);
     } catch { /* pula o épico */ }
     for (const h of hs) {
+      if (criadas.length >= LIMITE) break;
+      const key = normTitulo(String(h.titulo));
+      if (!key || vistos.has(key)) continue; // dedup por título normalizado
+      vistos.add(key);
       seq += 1; ordem += 1;
       const [row] = await db.insert(s.historia).values({
         iniciativaId: ini.id,
@@ -624,7 +636,7 @@ app.post("/:codigo/chat", async (c) => {
 // etapa de Histórias), marca como concluída, avança e abre a próxima. Retorna
 // o documento, a próxima etapa e se a iniciativa terminou. Reutilizado pelo
 // endpoint manual e pelo orquestrador da execução autônoma.
-export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador", opts?: { critico?: boolean; onRodada?: OnRodada }): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean; revisao?: { rodadas: number; nota: number; problemas: string[] } }> {
+export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquestrador", opts?: { critico?: boolean; onRodada?: OnRodada }): Promise<{ ok: boolean; erro?: string; doc?: any; etapaNome?: string; proxima: number | null; terminou: boolean; revisao?: { rodadas: number; nota: number; problemas: string[] }; sddCount?: number }> {
   const ordem = ini.etapaAtual;
   const [etapaRow] = await db.select().from(s.iniciativaEtapa).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, ordem)));
   if (!etapaRow) return { ok: false, erro: "etapa atual não encontrada", proxima: null, terminou: true };
@@ -650,6 +662,14 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
     doc = await gerarDocumentoDaEtapa(db, ini, ordem, etapaRow.nome, ag);
   }
 
+  // Etapa de Desenvolvimento: gera os SDDs (spec por história) na sequência, no
+  // modo autônomo (fica em Documentação, um doc por história).
+  let sddCount = 0;
+  if (opts?.critico && /desenvolv|implement|c[óo]digo/i.test(etapaRow.nome)) {
+    await opts.onRodada?.(1, "produzir");
+    sddCount = await gerarSddsPendentes(db, ini, ag?.nome ?? autorNome, 12);
+  }
+
   await db.update(s.iniciativaEtapa).set({
     status: "concluida", concluidaEm: new Date(),
     artefato: {
@@ -661,15 +681,16 @@ export async function concluirEtapaAtual(db: any, ini: any, autorNome = "Orquest
     },
   }).where(eq(s.iniciativaEtapa.id, etapaRow.id));
 
+  if (sddCount && revisao) (revisao as any).sddCount = sddCount;
   const proxima = ordem + 1;
   if (proxima > totalEtapas) {
     await db.update(s.iniciativa).set({ status: "concluida" }).where(eq(s.iniciativa.id, ini.id));
-    return { ok: true, doc, etapaNome: etapaRow.nome, proxima: null, terminou: true, revisao };
+    return { ok: true, doc, etapaNome: etapaRow.nome, proxima: null, terminou: true, revisao, sddCount };
   }
   await db.update(s.iniciativa).set({ etapaAtual: proxima }).where(eq(s.iniciativa.id, ini.id));
   await db.update(s.iniciativaEtapa).set({ status: "em_andamento" }).where(and(eq(s.iniciativaEtapa.iniciativaId, ini.id), eq(s.iniciativaEtapa.ordem, proxima)));
   await abrirProximaEtapa(db, ini, proxima);
-  return { ok: true, doc, etapaNome: etapaRow.nome, proxima, terminou: false, revisao };
+  return { ok: true, doc, etapaNome: etapaRow.nome, proxima, terminou: false, revisao, sddCount };
 }
 
 app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) => {
@@ -688,15 +709,10 @@ app.post("/:codigo/etapas/:ordem/concluir", rbac("criar_iniciativa"), async (c) 
 });
 
 /* Gera o SDD (spec testável) de UMA história — para desenvolver em outro agente. */
-app.post("/:codigo/historias/:id/sdd", rbac("criar_iniciativa"), async (c) => {
-  const me = c.get("me");
-  const db = await getDb();
-  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
-  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
-  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
-  const [h] = await db.select().from(s.historia).where(eq(s.historia.id, c.req.param("id")));
-  if (!h || h.iniciativaId !== ini.id) return c.json({ error: "história não encontrada" }, 404);
-
+// Gera o SDD (spec testável) de UMA história e o persiste como documento 'sdd'.
+// Substitui o SDD anterior da história (regenerar). Reutilizado pelo endpoint
+// manual e pela etapa de Desenvolvimento (SDDs gerados na sequência).
+async function gerarSddDaHistoria(db: any, ini: any, h: any, autorNome: string): Promise<any> {
   const contexto = await contextoEtapasAnteriores(db, ini);
   const criterios = (h.criteriosAceite ?? []).map((x: string) => `- ${x}`).join("\n") || "- (sem critérios registrados)";
   let sdd: any = null;
@@ -723,18 +739,43 @@ app.post("/:codigo/historias/:id/sdd", rbac("criar_iniciativa"), async (c) => {
     || `# SDD — ${h.codigo} ${h.titulo}\n\n## Contexto\n${h.descricao ?? ""}\n\n## Critérios de aceite\n${criterios}`;
   markdown += `\n\n## 🤖 Prompt para o agente de código\n\n\`\`\`\n${promptPronto}\n\`\`\`\n`;
 
-  // Substitui o SDD anterior desta história, se houver (regenerar).
   const antigos = (await db.select().from(s.documento)).filter((d: any) => d.tipo === "sdd" && d.historiaId === h.id);
   for (const d of antigos) await db.delete(s.documento).where(eq(s.documento.id, d.id));
-
   const [docSdd] = await db.insert(s.documento).values({
     squadId: ini.squadId, iniciativaId: ini.id, historiaId: h.id,
     titulo: `SDD — ${h.codigo} ${h.titulo}`, tipo: "sdd", emoji: "🧩", resumo,
     conteudo: markdown, extra: { promptPronto, arquivo: `${h.codigo}.spec.md` },
-    autorNome: me.nome, escopo: "squad",
+    autorNome, escopo: "squad",
   }).returning();
-  await audit(me, "gerar_sdd", `historia:${h.codigo}`, { docId: docSdd.id });
-  return c.json({ ok: true, docId: docSdd.id, promptPronto });
+  return { doc: docSdd, promptPronto };
+}
+
+// Gera SDDs (na sequência) para as histórias que ainda não têm — usado na etapa
+// de Desenvolvimento. Bounded para caber no tempo. Retorna quantos gerou.
+async function gerarSddsPendentes(db: any, ini: any, autorNome: string, cap = 12): Promise<number> {
+  const hs = (await db.select().from(s.historia)).filter((x: any) => x.iniciativaId === ini.id).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  const comSdd = new Set((await db.select().from(s.documento)).filter((d: any) => d.tipo === "sdd" && d.iniciativaId === ini.id).map((d: any) => d.historiaId));
+  let n = 0;
+  for (const h of hs) {
+    if (n >= cap) break;
+    if (comSdd.has(h.id)) continue;
+    await gerarSddDaHistoria(db, ini, h, autorNome);
+    n++;
+  }
+  return n;
+}
+
+app.post("/:codigo/historias/:id/sdd", rbac("criar_iniciativa"), async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [ini] = await db.select().from(s.iniciativa).where(eq(s.iniciativa.codigo, c.req.param("codigo")));
+  if (!ini) return c.json({ error: "iniciativa não encontrada" }, 404);
+  if (ini.squadId !== me.squadId) return c.json({ error: "apenas a própria squad" }, 403);
+  const [h] = await db.select().from(s.historia).where(eq(s.historia.id, c.req.param("id")));
+  if (!h || h.iniciativaId !== ini.id) return c.json({ error: "história não encontrada" }, 404);
+  const r = await gerarSddDaHistoria(db, ini, h, me.nome);
+  await audit(me, "gerar_sdd", `historia:${h.codigo}`, { docId: r.doc.id });
+  return c.json({ ok: true, docId: r.doc.id, promptPronto: r.promptPronto });
 });
 
 /* Ao final do desenvolvimento: a IA SUGERE uma capacidade para registrar na base. */
