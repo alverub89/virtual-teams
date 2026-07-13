@@ -15,6 +15,9 @@ interface Indicadores {
   fluxo: { etapa: string; iniciativas: number }[];
   leadTimePorEtapa: { etapa: string; dias: number; amostra: number }[];
   masterCobertura: { total: number; revisados: number; pct: number | null; notaMedia: number | null };
+  filaAprovacoes: { pendentes: number; maisAntigaDias: number | null; idadeMediaDias: number | null; taxaRejeicao: number | null; decididos: number };
+  coberturaGuardRails: { ativos: number; comGuardRails: number; pct: number | null };
+  tokensPorIniciativa: { codigo: string; tokens: number }[];
   consumoPorSquad: { squad: string; tokens: number; custo: number; budget: number | null; pct: number | null; alerta: boolean }[];
   gmuds90d: { numero: string; titulo: string; status: string; janela: string | null }[];
   progressoKrs: { descricao: string; progresso: number }[];
@@ -93,7 +96,22 @@ export default function Indicadores() {
         </div>
       </div>
 
+      <div className="sec-title" style={{ marginTop: 20 }}>Governança & operação</div>
+      <div className="grid g4" style={{ marginBottom: 14 }}>
+        <Kpi label="Fila de aprovações" value={data ? data.filaAprovacoes.pendentes : "…"} suffix="pendentes" delta={data && data.filaAprovacoes.maisAntigaDias != null ? `mais antiga: ${data.filaAprovacoes.maisAntigaDias}d` : (data ? "fila vazia" : undefined)} />
+        <Kpi label="Idade média na fila" value={data ? (data.filaAprovacoes.idadeMediaDias ?? "—") : "…"} suffix="dias" />
+        <Kpi label="Taxa de rejeição" value={data ? (data.filaAprovacoes.taxaRejeicao != null ? `${data.filaAprovacoes.taxaRejeicao}%` : "—") : "…"} delta={data ? `${data.filaAprovacoes.decididos} decididos` : undefined} />
+        <Kpi label="Guard-rails customizados" value={data ? (data.coberturaGuardRails.pct != null ? `${data.coberturaGuardRails.pct}%` : "—") : "…"} delta={data ? `${data.coberturaGuardRails.comGuardRails}/${data.coberturaGuardRails.ativos} agentes` : undefined} />
+      </div>
+
       <div className="grid g2" style={{ alignItems: "start", marginTop: 14 }}>
+        <div className="card viz">
+          <h3>Tokens por iniciativa — execução autônoma</h3>
+          <div className="sub">consumo acumulado da orquestração, para prever custo antes de aprovar</div>
+          {(data?.tokensPorIniciativa ?? []).length === 0 && <p className="sub">Sem runs de orquestração com consumo ainda.</p>}
+          <HBar rows={(data?.tokensPorIniciativa ?? []).map((t) => ({ label: t.codigo, value: Math.round(t.tokens / 1000) }))} />
+          <div className="axis-note">mil tokens por iniciativa (runs autônomos)</div>
+        </div>
         <div className="card viz">
           <h3>Progresso dos KRs</h3>
           <div className="sub">realizado mais recente vs. meta do trimestre</div>

@@ -17,6 +17,9 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
   const medicoes = await db.select().from(s.krMedicao);
   const etapas = await db.select().from(s.iniciativaEtapa);
   const execPassos = await db.select().from(s.execucaoPasso);
+  const tools = await db.select().from(s.tool);
+  const mcps = await db.select().from(s.conexaoMcp);
+  const agentes = await db.select().from(s.agente);
 
   const etapaNomes = ["Brief", "PRD", "Arquitetura", "Histórias", "Desenvolvimento", "Esteira & GMUD"];
   const fluxo = etapaNomes.map((nome, idx) => ({
@@ -85,6 +88,44 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     notaMedia: notas.length ? Math.round((notas.reduce((a: number, b: number) => a + b, 0) / notas.length) * 10) / 10 : null,
   };
 
+  // Fila de aprovações (governança): tamanho, idade da mais antiga e taxa de
+  // rejeição entre os itens que já passaram pela fila (têm submetidoEm).
+  const governanca = [...tools, ...mcps];
+  const pendentes = governanca.filter((x: any) => x.aprovacao === "pendente");
+  const idadesDias = pendentes
+    .filter((x: any) => x.submetidoEm)
+    .map((x: any) => (Date.now() - new Date(x.submetidoEm).getTime()) / 86400000);
+  const decididos = governanca.filter((x: any) => x.submetidoEm && (x.aprovacao === "aprovado" || x.aprovacao === "rejeitado"));
+  const rejeitados = decididos.filter((x: any) => x.aprovacao === "rejeitado");
+  const filaAprovacoes = {
+    pendentes: pendentes.length,
+    maisAntigaDias: idadesDias.length ? Math.round(Math.max(...idadesDias)) : null,
+    idadeMediaDias: idadesDias.length ? Math.round((idadesDias.reduce((a: number, b: number) => a + b, 0) / idadesDias.length) * 10) / 10 : null,
+    taxaRejeicao: decididos.length ? Math.round((rejeitados.length / decididos.length) * 100) : null,
+    decididos: decididos.length,
+  };
+
+  // Cobertura de guard-rails: agentes ativos com guard-rails customizados.
+  const agentesAtivos = agentes.filter((a: any) => a.ativo);
+  const comGuardRails = agentesAtivos.filter((a: any) => Array.isArray(a.guardRails) && a.guardRails.length > 0);
+  const coberturaGuardRails = {
+    ativos: agentesAtivos.length,
+    comGuardRails: comGuardRails.length,
+    pct: agentesAtivos.length ? Math.round((comGuardRails.length / agentesAtivos.length) * 100) : null,
+  };
+
+  // Tokens por iniciativa (execução autônoma): ajuda a prever o custo de uma
+  // iniciativa antes de aprová-la. Agrega os runs de orquestração por código.
+  const porIni: Record<string, number> = {};
+  for (const r of runs as any[]) {
+    if (r.modo === "iniciativa" && r.iniciativaId) porIni[r.iniciativaId] = (porIni[r.iniciativaId] ?? 0) + (r.tokensGastos ?? 0);
+  }
+  const tokensPorIniciativa = Object.entries(porIni)
+    .map(([iniId, tokens]) => ({ codigo: (inis as any[]).find((i: any) => i.id === iniId)?.codigo ?? "?", tokens: tokens as number }))
+    .filter((x) => x.tokens > 0)
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 8);
+
   // Consumo x orçamento por squad (mês corrente) com alerta de estouro.
   const mesAtual = new Date().toISOString().slice(0, 7);
   const consumoPorSquad = squads.map((sq: any) => {
@@ -109,6 +150,9 @@ app.get("/indicadores", rbac("ver_gestao"), async (c) => {
     fluxo,
     leadTimePorEtapa,
     masterCobertura,
+    filaAprovacoes,
+    coberturaGuardRails,
+    tokensPorIniciativa,
     consumoPorSquad,
     gmuds90d: gmuds.map((g: any) => ({ numero: g.numero, titulo: g.titulo, status: g.status, janela: g.janela })),
     okrs: okrs.map((o: any) => ({ escopo: o.escopo, objetivo: o.objetivo })),
