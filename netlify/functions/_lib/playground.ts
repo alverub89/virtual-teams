@@ -151,6 +151,7 @@ export interface RemoteMcp {
   url: string;
   descricao: string;
   dica: string; // exemplo de uso para a demo
+  exemplos: Record<string, Record<string, unknown>>; // tool → args de exemplo (pré-preenche o formulário)
 }
 
 export const REMOTE_MCPS: RemoteMcp[] = [
@@ -159,21 +160,33 @@ export const REMOTE_MCPS: RemoteMcp[] = [
     sistema: "deepwiki",
     url: "https://mcp.deepwiki.com/mcp",
     descricao: "Pergunta em linguagem natural sobre qualquer repositório público do GitHub (docs geradas).",
-    dica: "tool ask_question com { repoName: 'facebook/react', question: 'o que é o hook useState?' }",
+    dica: "repoName no formato owner/repo — ex.: bmad-code-org/BMAD-METHOD",
+    exemplos: {
+      read_wiki_structure: { repoName: "bmad-code-org/BMAD-METHOD" },
+      read_wiki_contents: { repoName: "bmad-code-org/BMAD-METHOD" },
+      ask_question: { repoName: "bmad-code-org/BMAD-METHOD", question: "Quais são as fases e os agentes do método?" },
+    },
   },
   {
     nome: "Context7",
     sistema: "context7",
     url: "https://mcp.context7.com/mcp",
     descricao: "Documentação atualizada de bibliotecas e frameworks, pronta para LLM.",
-    dica: "resolve-library-id + get-library-docs para a lib desejada",
+    dica: "resolve-library-id (libraryName) → get-library-docs",
+    exemplos: {
+      "resolve-library-id": { libraryName: "react" },
+      "get-library-docs": { context7CompatibleLibraryID: "/facebook/react", topic: "hooks" },
+    },
   },
   {
     nome: "GitMCP (servers)",
     sistema: "gitmcp",
     url: "https://gitmcp.io/modelcontextprotocol/servers",
     descricao: "MCP instantâneo sobre a documentação de um repositório GitHub (aqui: modelcontextprotocol/servers).",
-    dica: "fetch_documentation / search_documentation",
+    dica: "search_documentation (query) / fetch_documentation",
+    exemplos: {
+      search_documentation: { query: "how to build a server with tools" },
+    },
   },
 ];
 

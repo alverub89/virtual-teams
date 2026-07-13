@@ -9,10 +9,12 @@ interface RemoteTool {
   inputSchema?: { properties?: Record<string, { description?: string; type?: string }>; required?: string[] };
 }
 
-function RemoteToolCall({ url, tool }: { url: string; tool: RemoteTool }) {
+function RemoteToolCall({ url, tool, exemplo }: { url: string; tool: RemoteTool; exemplo?: Record<string, unknown> }) {
   const props = tool.inputSchema?.properties ?? {};
   const campos = Object.keys(props);
-  const [args, setArgs] = useState<Record<string, string>>(() => Object.fromEntries(campos.map((k) => [k, ""])));
+  const [args, setArgs] = useState<Record<string, string>>(() =>
+    Object.fromEntries(campos.map((k) => [k, exemplo?.[k] != null ? String(exemplo[k]) : ""]))
+  );
   const [out, setOut] = useState("");
   const [ms, setMs] = useState<number | null>(null);
 
@@ -52,7 +54,7 @@ function RemoteToolCall({ url, tool }: { url: string; tool: RemoteTool }) {
 
 // Conecta (como cliente MCP) a um servidor remoto pela URL, lista as tools reais
 // e permite chamá-las — tudo via backend (evita CORS e trata SSE).
-export function RemoteMcpTester({ url }: { url: string }) {
+export function RemoteMcpTester({ url, exemplos }: { url: string; exemplos?: Record<string, Record<string, unknown>> }) {
   const [dados, setDados] = useState<{ serverInfo?: any; tools?: RemoteTool[]; erro?: string } | null>(null);
 
   const conectar = useMutation({
@@ -76,7 +78,7 @@ export function RemoteMcpTester({ url }: { url: string }) {
             <Chip tone="neutral">{dados.tools.length} tools</Chip>
           </div>
           {dados.tools.length === 0 && <p className="empty-note">Conectou, mas o servidor não expôs tools.</p>}
-          {dados.tools.map((t) => <RemoteToolCall key={t.name} url={url} tool={t} />)}
+          {dados.tools.map((t) => <RemoteToolCall key={t.name} url={url} tool={t} exemplo={exemplos?.[t.name]} />)}
         </>
       )}
     </Card>

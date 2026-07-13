@@ -16,7 +16,7 @@ interface Tool {
   exemplo: Record<string, unknown>;
 }
 interface MarketMcp { nome: string; sistema: string; url: string; descricao: string; categoria: string; registrado: boolean }
-interface RemoteMcp { nome: string; sistema: string; url: string; descricao: string; dica: string; registrado: boolean }
+interface RemoteMcp { nome: string; sistema: string; url: string; descricao: string; dica: string; registrado: boolean; exemplos: Record<string, Record<string, unknown>> }
 interface Estado {
   provisionado: boolean;
   mcp: { nome: string; proposito: string | null; endpoint: string | null; tools: Tool[] } | null;
@@ -100,7 +100,7 @@ export default function Playground() {
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
 
-  const [conectarUrl, setConectarUrl] = useState<string | null>(null);
+  const [conectar, setConectar] = useState<{ url: string; exemplos?: Record<string, Record<string, unknown>> } | null>(null);
   const [urlManual, setUrlManual] = useState("");
   const categorias = [...new Set((data?.market ?? []).map((m) => m.categoria))];
 
@@ -175,7 +175,7 @@ export default function Playground() {
             <p className="sub" style={{ fontSize: 11.5 }}><b>Ex.:</b> {m.dica}</p>
             <div className="prompt-box" style={{ fontSize: 11, userSelect: "all", margin: "6px 0" }}>{m.url}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Button variant="primary" onClick={() => setConectarUrl(m.url)}>Conectar</Button>
+              <Button variant="primary" onClick={() => setConectar({ url: m.url, exemplos: m.exemplos })}>Conectar</Button>
               {!m.registrado && <Button onClick={() => registrar.mutate(m.nome)}>Registrar</Button>}
             </div>
           </Card>
@@ -189,13 +189,13 @@ export default function Playground() {
           <div style={{ flex: 1 }}>
             <Fld label="URL do servidor MCP"><input className="in" value={urlManual} onChange={(e) => setUrlManual(e.target.value)} placeholder="https://mcp.exemplo.com/mcp" /></Fld>
           </div>
-          <Button variant="primary" onClick={() => urlManual.startsWith("http") && setConectarUrl(urlManual)}>Conectar</Button>
+          <Button variant="primary" onClick={() => urlManual.startsWith("http") && setConectar({ url: urlManual })}>Conectar</Button>
         </div>
       </Card>
 
-      {conectarUrl && (
+      {conectar && (
         <div style={{ marginTop: 10 }}>
-          <RemoteMcpTester key={conectarUrl} url={conectarUrl} />
+          <RemoteMcpTester key={conectar.url} url={conectar.url} exemplos={conectar.exemplos} />
         </div>
       )}
 
