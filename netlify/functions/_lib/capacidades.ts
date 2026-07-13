@@ -28,6 +28,23 @@ async function ghGet(url: string, token?: string, raw = false): Promise<{ ok: bo
 
 const MANIFESTS = ["package.json", "pom.xml", "build.gradle", "go.mod", "requirements.txt", "Cargo.toml", "composer.json", "pyproject.toml"];
 const ANCHOR = /(^|\/)(main|index|app|application|server|api)\.(ts|js|py|go|java|kt|rb)$|controller|service|domain|handler|usecase|route/i;
+// Arquivos de dados/modelo — priorizados na leitura profunda (doc de Dados).
+const SCHEMA = /(schema|migration|entit(y|ies)|\bmodels?\b|\.prisma$|\.sql$|\bdtos?\b|repository|repositories)/i;
+
+export interface RepoLido {
+  nome: string;
+  ok: boolean;
+  erro?: string;
+  contexto: string;
+  meta?: { descricao: string; lingua: string; dirsTopo: string[]; arquivos: number; temReadme: boolean };
+}
+export interface LerRepoOpts {
+  maxArquivos?: number; // total de arquivos-âncora lidos
+  maxChars?: number;    // caracteres por arquivo
+  foco?: RegExp;        // padrão priorizado (ex.: SCHEMA para doc de Dados)
+  maxFoco?: number;     // quantos arquivos do foco ler antes das âncoras
+}
+export { SCHEMA };
 
 function dicaErro(status: number): string {
   if (status === 401) return "token inválido/expirado";
@@ -37,7 +54,9 @@ function dicaErro(status: number): string {
   return `HTTP ${status}`;
 }
 
-export async function lerRepo(nome: string, token?: string): Promise<{ nome: string; ok: boolean; erro?: string; contexto: string }> {
+export async function lerRepo(nome: string, token?: string, opts?: LerRepoOpts): Promise<RepoLido> {
+  const maxArq = opts?.maxArquivos ?? 5;
+  const maxCh = opts?.maxChars ?? 1200;
   // 1) metadados do repo (valida acesso e descobre o branch padrão)
   const meta = await ghGet(`${GH}/repos/${nome}`, token);
   if (!meta.ok) {
@@ -64,27 +83,44 @@ export async function lerRepo(nome: string, token?: string): Promise<{ nome: str
   const descricao = repo.description || "";
   const lingua = repo.language || "";
 
-  // 2) árvore de arquivos pelo branch padrão (a API de trees não aceita "HEAD")
+  // 2) árvore de arquivos pelo branch padrão (a API de trees não aceita "HEAD").
+  //    Só BLOBS (arquivos) — nunca diretórios (senão o "contents" devolve um
+  //    JSON de listagem que polui o contexto).
   const tree = await ghGet(`${GH}/repos/${nome}/git/trees/${branch}?recursive=1`, token);
-  let paths: string[] = [];
-  try { paths = (JSON.parse(tree.text).tree ?? []).map((t: any) => t.path).filter(Boolean); } catch { /* */ }
+  let entries: { path: string; type: string; size?: number }[] = [];
+  try { entries = (JSON.parse(tree.text).tree ?? []).filter((t: any) => t?.path); } catch { /* */ }
+  const blobs = entries.filter((t) => t.type === "blob");
+  const paths = blobs.map((t) => t.path);
   const dirsTopo = [...new Set(paths.filter((p) => p.includes("/")).map((p) => p.split("/")[0]))].slice(0, 30);
+  const tamanho = new Map(blobs.map((t) => [t.path, t.size ?? 0]));
+  const legivel = (p: string) => (tamanho.get(p) ?? 0) <= 120_000; // pula binários/arquivos enormes
 
   const rm = await ghGet(`${GH}/repos/${nome}/readme`, token, true);
   const readme = rm.ok ? rm.text.slice(0, 4000) : "";
   const manifestPath = paths.find((p) => MANIFESTS.includes(p));
   let manifest = "";
-  if (manifestPath) { const mr = await ghGet(`${GH}/repos/${nome}/contents/${manifestPath}`, token, true); if (mr.ok) manifest = mr.text.slice(0, 1500); }
-  const anchors = paths.filter((p) => ANCHOR.test(p)).slice(0, 5);
-  let anchorTxt = "";
-  for (const a of anchors) { const ar = await ghGet(`${GH}/repos/${nome}/contents/${a}`, token, true); if (ar.ok) anchorTxt += `\n--- ${a} ---\n${ar.text.slice(0, 1200)}`; }
+  if (manifestPath) { const mr = await ghGet(`${GH}/repos/${nome}/contents/${manifestPath}`, token, true); if (mr.ok) manifest = mr.text.slice(0, 2000); }
+
+  // Seleção de arquivos: primeiro o FOCO (ex.: schema/migração p/ doc de Dados),
+  // depois as âncoras genéricas — até maxArq no total, sem duplicar.
+  const escolhidos: string[] = [];
+  const push = (p: string) => { if (!escolhidos.includes(p) && p !== manifestPath && legivel(p)) escolhidos.push(p); };
+  if (opts?.foco) for (const p of paths) { if (escolhidos.length >= (opts.maxFoco ?? 6)) break; if (opts.foco.test(p)) push(p); }
+  for (const p of paths) { if (escolhidos.length >= maxArq) break; if (ANCHOR.test(p)) push(p); }
+
+  let arquivosTxt = "";
+  for (const a of escolhidos) {
+    const ar = await ghGet(`${GH}/repos/${nome}/contents/${a}`, token, true);
+    if (ar.ok) arquivosTxt += `\n--- ${a} ---\n${ar.text.slice(0, maxCh)}`;
+  }
 
   const contexto =
     `Repositório ${nome}\nDescrição: ${descricao || "-"}\nLinguagem: ${lingua || "-"}\n` +
     `Pastas de topo: ${dirsTopo.join(", ") || "-"}\nArquivos: ${paths.length}\n` +
+    `Estrutura (amostra): ${paths.slice(0, 80).join(", ")}\n` +
     `README:\n${readme || "(sem README)"}\nManifest (${manifestPath ?? "-"}):\n${manifest || "-"}\n` +
-    `Arquivos-âncora:${anchorTxt || " (nenhum)"}`;
-  return { nome, ok: true, contexto };
+    `Arquivos lidos:${arquivosTxt || " (nenhum)"}`;
+  return { nome, ok: true, contexto, meta: { descricao, lingua, dirsTopo, arquivos: paths.length, temReadme: !!readme } };
 }
 
 // Testa o token: quem é (login), se é válido, e o acesso a cada repo da squad.

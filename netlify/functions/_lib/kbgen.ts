@@ -5,7 +5,7 @@
 
 import { eq, inArray } from "drizzle-orm";
 import { schema as s } from "../../../db/client";
-import { lerRepo, resolveGithubToken } from "./capacidades";
+import { lerRepo, resolveGithubToken, SCHEMA, type RepoLido } from "./capacidades";
 
 // Catálogo de tipos de documento gerados por repositório. `padrao` = marcado
 // por default na UI. Cada tipo tem um FOCO específico para a síntese da IA.
@@ -37,26 +37,44 @@ function tipoDe(key: string | null | undefined) {
 }
 
 // Sintetiza um documento de um tipo a partir do conteúdo já lido do repositório.
+// Tenta 2 vezes (a síntese pode falhar por JSON malformado esporádico).
 async function sintetizar(repo: string, foco: string, contexto: string): Promise<{ markdown: string; resumo: string } | null> {
-  try {
-    const { gerarJson } = await import("./aigen");
-    const doc = await gerarJson({
-      tarefa: "arquitetura",
-      system:
-        "Você escreve documentação técnica de software para uma BASE DE CONHECIMENTO, dando CONTEXTO ao time e a agentes de IA. " +
-        `Escreva ${foco} Responda SOMENTE JSON. Baseie-se apenas no conteúdo lido — não invente o que não está evidente.`,
-      instrucao:
-        `Conteúdo lido do repositório ${repo}:\n${contexto}\n\n` +
-        'Formato JSON: { "resumo": "1 a 2 frases", "markdown": "documentação em Markdown, com títulos (##), listas e tabelas quando ajudar" }',
-      maxTokens: 2200,
-    });
-    const markdown = doc?.markdown && String(doc.markdown).trim();
-    const resumo = doc?.resumo && String(doc.resumo).trim();
-    if (markdown) return { markdown, resumo: resumo || "" };
-    return null;
-  } catch {
-    return null;
+  const { gerarJson } = await import("./aigen");
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    try {
+      const doc = await gerarJson({
+        tarefa: "arquitetura",
+        system:
+          "Você escreve documentação técnica de software para uma BASE DE CONHECIMENTO, dando CONTEXTO ao time e a agentes de IA. " +
+          `Escreva ${foco} Seja DETALHADO e específico ao que foi lido (cite arquivos, módulos, campos e rotas reais); não invente o que não está evidente. Responda SOMENTE JSON válido.`,
+        instrucao:
+          `Conteúdo lido do repositório ${repo}:\n${contexto}\n\n` +
+          'Formato JSON: { "resumo": "1 a 2 frases", "markdown": "documentação rica em Markdown, com seções (##), listas e tabelas quando ajudar" }',
+        maxTokens: 3000,
+      });
+      const markdown = doc?.markdown && String(doc.markdown).trim();
+      const resumo = doc?.resumo && String(doc.resumo).trim();
+      if (markdown) return { markdown, resumo: resumo || "" };
+    } catch {
+      /* tenta de novo */
+    }
   }
+  return null;
+}
+
+// Fallback LIMPO quando a síntese por IA não conclui: usa os metadados lidos,
+// nunca despeja o contexto cru (que contém JSON de API).
+function fallbackDoc(tipoEmoji: string, tipoLabel: string, repo: string, lido: RepoLido): string {
+  if (!lido.ok) return `# ${tipoEmoji} ${tipoLabel} — ${repo}\n\n> ⚠️ Não foi possível ler o repositório: ${lido.erro}.\n\nVerifique o token do GitHub e use **Regenerar**.`;
+  const m = lido.meta;
+  return (
+    `# ${tipoEmoji} ${tipoLabel} — ${repo}\n\n` +
+    `> ⚠️ A síntese por IA não pôde ser concluída agora. Abaixo, o que foi lido do repositório. Use **Regenerar** para tentar de novo.\n\n` +
+    `- **Linguagem:** ${m?.lingua || "-"}\n` +
+    `- **Descrição:** ${m?.descricao || "-"}\n` +
+    `- **Pastas de topo:** ${(m?.dirsTopo ?? []).join(", ") || "-"}\n` +
+    `- **Arquivos:** ${m?.arquivos ?? "-"}\n`
+  );
 }
 
 // Gera um LOTE de documentos (vários tipos) para o mesmo repositório: lê o repo
@@ -74,16 +92,23 @@ export async function gerarKbDeRepoGrupo(db: any, artigoIds: string[]): Promise<
     const token = resolveGithubToken(com);
 
     for (const a of arts) await db.update(s.kbArtigo).set({ progresso: `Lendo ${repo}…` }).where(eq(s.kbArtigo.id, a.id));
-    const lido = await lerRepo(repo, token); // UMA leitura para todos os docs
+    // Leitura PROFUNDA (uma vez para todos os docs): mais arquivos e maiores,
+    // priorizando schema/migração/model (essencial para o doc de Dados).
+    const precisaDados = arts.some((a: any) => a.tipoDoc === "dados");
+    const lido = await lerRepo(repo, token, {
+      maxArquivos: 12,
+      maxChars: 2200,
+      foco: precisaDados ? SCHEMA : undefined,
+      maxFoco: precisaDados ? 6 : 0,
+    });
 
     for (const a of arts) {
       const tipo = tipoDe(a.tipoDoc);
       await db.update(s.kbArtigo).set({ progresso: `Sintetizando documentação ${tipo.label.toLowerCase()}…` }).where(eq(s.kbArtigo.id, a.id));
       const doc = await sintetizar(repo, tipo.foco, lido.contexto);
-      const markdown = doc?.markdown
-        || `# ${tipo.emoji} ${tipo.label} — ${repo}\n\n${lido.ok ? "_Gerado a partir do conteúdo lido do repositório._" : `_Não foi possível ler o repositório: ${lido.erro}._`}\n\n${lido.contexto}`;
+      const markdown = doc?.markdown || fallbackDoc(tipo.emoji, tipo.label, repo, lido);
       const resumo = doc?.resumo || `Documentação ${tipo.label.toLowerCase()} de ${repo}.`;
-      const diag = lido.ok ? (doc ? null : "gerado a partir do conteúdo do repositório (síntese por IA indisponível)") : `leitura parcial de ${repo}: ${lido.erro}`;
+      const diag = lido.ok ? (doc ? null : "síntese por IA indisponível — use Regenerar") : `leitura parcial de ${repo}: ${lido.erro}`;
       await db.update(s.kbArtigo).set({ status: "pronto", conteudo: markdown, resumo: resumo.slice(0, 280), progresso: diag }).where(eq(s.kbArtigo.id, a.id));
     }
   } catch (e) {

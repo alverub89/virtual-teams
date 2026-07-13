@@ -140,6 +140,23 @@ app.post("/", async (c) => {
   return c.json(artigo, 201);
 });
 
+/* Regenerar um documento gerado por IA (relê o repositório). */
+app.post("/:id/regenerar", async (c) => {
+  const me = c.get("me");
+  const db = await getDb();
+  const [art] = await db.select().from(s.kbArtigo).where(eq(s.kbArtigo.id, c.req.param("id")));
+  if (!art || art.squadId !== me.squadId) return c.json({ error: "artigo não encontrado" }, 404);
+  const pode = me.papel === "pm" || me.papel === "tech_lead" || me.papel === "cto" || art.autorId === me.id;
+  if (!pode) return c.json({ error: "sem permissão" }, 403);
+  if (art.origem !== "ia" || !art.repo) return c.json({ error: "apenas documentos gerados de repositório" }, 400);
+  if (art.status === "gerando") return c.json({ error: "já está gerando" }, 409);
+  await db.update(s.kbArtigo).set({ status: "gerando", progresso: "na fila…" }).where(eq(s.kbArtigo.id, art.id));
+  const { enqueueKb } = await import("../_lib/kbgen");
+  await enqueueKb([art.id]);
+  await audit(me, "regenerar_kb", `kb:${art.id}`, { repo: art.repo });
+  return c.json({ ok: true });
+});
+
 /* Endosso RT/comunidade — só arquiteto (docs/spec §5.2). */
 app.post("/:id/endossar", rbac("endossar_kb"), async (c) => {
   const me = c.get("me");

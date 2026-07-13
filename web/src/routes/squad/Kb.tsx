@@ -263,6 +263,11 @@ export function KbArtigo() {
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
+  const regenerar = useMutation({
+    mutationFn: () => post(`/kb/${id}/regenerar`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["kb-artigo", id] }); toast("🤖 Regenerando documento…"); },
+    onError: (e) => toast(`⚠️ ${(e as Error).message}`),
+  });
 
   if (!artigo) return <p className="muted">Carregando…</p>;
   const podeEditar = artigo.status !== "gerando" && (me?.papel === "pm" || me?.papel === "tech_lead" || me?.papel === "cto" || me?.id === artigo.autorId);
@@ -287,6 +292,7 @@ export function KbArtigo() {
             {artigo.endossos.map((n) => (
               <Chip key={n} tone="good">✓ {n === "comunidade" ? "comunidade" : "RT"}</Chip>
             ))}
+            {podeEditar && artigo.origem === "ia" && artigo.repo && <Button onClick={() => regenerar.mutate()}>🤖 Regenerar</Button>}
             {podeEditar && <Button onClick={abrirEdicao}>✏️ Editar</Button>}
             {me?.papel === "cto" && artigo.endossos.length < 2 && (
               <Button onClick={() => endossar.mutate(artigo.endossos.includes("release_train") ? "comunidade" : "release_train")}>
