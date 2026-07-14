@@ -53,8 +53,11 @@ export const auth: MiddlewareHandler = async (c, next) => {
   // de um header do cliente — não dá para forjar nem ligar sozinho. Só vale se
   // a sessão é de fato do CTO. Trava de escrita (403) APENAS nas rotas de dados
   // da squad; Console/Gestão do próprio CTO seguem livres.
-  const rotaAdmin = /\/(console|gestao|convites|onboarding)(\/|$)/.test(c.req.path);
-  if (me.auditSquadId && me.papel === "cto" && !rotaAdmin) {
+  // Rotas isentas da trava: Console/Gestão do CTO e o PRÓPRIO controle de
+  // auditoria (start/stop/switch) — senão, uma vez auditando, o CTO não
+  // conseguiria trocar de squad nem sair (POST cairia no 403).
+  const rotaIsenta = /\/(console|gestao|convites|onboarding)(\/|$)|\/me\/audit(\/|$)/.test(c.req.path);
+  if (me.auditSquadId && me.papel === "cto" && !rotaIsenta) {
     if (c.req.method !== "GET") {
       return c.json({ error: "modo auditoria: somente leitura — saia da auditoria para editar" }, 403);
     }

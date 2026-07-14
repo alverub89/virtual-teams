@@ -78,7 +78,10 @@ app.get("/me/squads", async (c) => {
   if (me.papel !== "cto") return c.json({ squads: [] });
   const { getDb, schema } = await import("../../db/client");
   const db = await getDb();
-  const squads = await db.select().from(schema.squad);
+  // Só as squads da PRÓPRIA comunidade do CTO (isolamento multi-tenant).
+  const rts = await db.select().from(schema.releaseTrain);
+  const meusRtIds = new Set(rts.filter((rt: any) => rt.comunidadeId === me.comunidadeId).map((rt: any) => rt.id));
+  const squads = (await db.select().from(schema.squad)).filter((sq: any) => meusRtIds.has(sq.releaseTrainId));
   return c.json({ squads: squads.map((s: any) => ({ id: s.id, nome: s.nome })) });
 });
 
@@ -95,6 +98,9 @@ app.post("/me/audit/start", async (c) => {
   const db = await getDb();
   const [sq] = await db.select().from(schema.squad).where(eq(schema.squad.id, squadId));
   if (!sq) return c.json({ error: "squad não encontrada" }, 404);
+  // A squad tem de ser da comunidade do CTO (isolamento multi-tenant).
+  const [rt] = await db.select().from(schema.releaseTrain).where(eq(schema.releaseTrain.id, sq.releaseTrainId));
+  if (!rt || rt.comunidadeId !== me.comunidadeId) return c.json({ error: "squad fora da sua comunidade" }, 403);
   const { setCookie } = await import("hono/cookie");
   const { signSession, cookieOpts, sessionCookieName } = await import("./_mw/auth");
   const { meDaPessoa } = await import("./_routes/auth");

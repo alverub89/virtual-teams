@@ -21,9 +21,11 @@ app.get("/", async (c) => {
   const meuRt = me.squadId ? rtDeSquad.get(me.squadId) : undefined;
   // Diretoria (CTO/Gestão) enxerga tudo da própria comunidade — inclusive os
   // docs de escopo squad (features) das squads, que antes ficavam invisíveis
-  // porque a diretoria não tem squadId próprio. Exceção: quando o CTO está
-  // AUDITANDO uma squad, ele vê como aquela squad (não a comunidade toda).
-  const verComunidade = (me.escopos ?? []).includes("comunidade") && !me.auditando;
+  // porque a diretoria não tem squadId próprio. Quando o CTO AUDITA uma squad,
+  // ele vê como aquela squad; mas a visão de Gestão força `?comunidade=1` para
+  // permanecer no nível da comunidade mesmo durante uma auditoria.
+  const forcaComunidade = c.req.query("comunidade") === "1";
+  const verComunidade = (me.escopos ?? []).includes("comunidade") && (!me.auditando || forcaComunidade);
 
   const visivel = (d: any) => {
     if (d.escopo === "comunidade") return comDeSquad(d.squadId) === me.comunidadeId;

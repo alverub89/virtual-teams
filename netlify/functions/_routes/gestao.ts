@@ -6,20 +6,30 @@ import { getDb, schema as s } from "../../../db/client";
 const app = new Hono();
 
 app.get("/indicadores", rbac("ver_gestao"), async (c) => {
+  const me = c.get("me");
   const db = await getDb();
-  const squads = await db.select().from(s.squad);
-  const inis = await db.select().from(s.iniciativa);
-  const gmuds = await db.select().from(s.gmud);
-  const consumo = await db.select().from(s.consumoTokens);
-  const runs = await db.select().from(s.execucaoAutonoma);
-  const okrs = await db.select().from(s.okr);
-  const krs = await db.select().from(s.keyResult);
+
+  // ISOLAMENTO MULTI-TENANT: a diretoria só enxerga a PRÓPRIA comunidade.
+  // Tudo é derivado das squads dos release trains da minha comunidade.
+  const rts = await db.select().from(s.releaseTrain);
+  const meusRtIds = new Set(rts.filter((rt: any) => rt.comunidadeId === me.comunidadeId).map((rt: any) => rt.id));
+  const squads = (await db.select().from(s.squad)).filter((sq: any) => meusRtIds.has(sq.releaseTrainId));
+  const squadIds = new Set(squads.map((sq: any) => sq.id));
+  const inis = (await db.select().from(s.iniciativa)).filter((i: any) => squadIds.has(i.squadId));
+  const iniIds = new Set(inis.map((i: any) => i.id));
+  const gmuds = (await db.select().from(s.gmud)).filter((g: any) => squadIds.has(g.squadId));
+  const consumo = (await db.select().from(s.consumoTokens)).filter((r: any) => squadIds.has(r.squadId));
+  const runs = (await db.select().from(s.execucaoAutonoma)).filter((r: any) => squadIds.has(r.squadId));
+  const execIds = new Set(runs.map((r: any) => r.id));
+  const okrs = (await db.select().from(s.okr)).filter((o: any) => o.squadId && squadIds.has(o.squadId));
+  const okrIds = new Set(okrs.map((o: any) => o.id));
+  const krs = (await db.select().from(s.keyResult)).filter((k: any) => okrIds.has(k.okrId));
   const medicoes = await db.select().from(s.krMedicao);
-  const etapas = await db.select().from(s.iniciativaEtapa);
-  const execPassos = await db.select().from(s.execucaoPasso);
-  const tools = await db.select().from(s.tool);
-  const mcps = await db.select().from(s.conexaoMcp);
-  const agentes = await db.select().from(s.agente);
+  const etapas = (await db.select().from(s.iniciativaEtapa)).filter((e: any) => iniIds.has(e.iniciativaId));
+  const execPassos = (await db.select().from(s.execucaoPasso)).filter((p: any) => execIds.has(p.execucaoId));
+  const tools = (await db.select().from(s.tool)).filter((t: any) => (t.squadId && squadIds.has(t.squadId)) || t.comunidadeId === me.comunidadeId);
+  const mcps = (await db.select().from(s.conexaoMcp)).filter((m: any) => (m.squadId && squadIds.has(m.squadId)) || m.comunidadeId === me.comunidadeId);
+  const agentes = await db.select().from(s.agente); // catálogo de agentes é de plataforma
   const auditoria = await db.select().from(s.auditLog);
 
   const etapaNomes = ["Brief", "PRD", "Arquitetura", "Histórias", "Desenvolvimento", "Esteira & GMUD"];
