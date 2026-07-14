@@ -50,9 +50,12 @@ export const auth: MiddlewareHandler = async (c, next) => {
   }
 
   // "Auditar como squad": só o CTO pode assumir a visão de uma squad, e
-  // somente em leitura (GET). O header vem do front (modo auditoria).
+  // somente em leitura (GET). O header vem do front (modo auditoria). A trava
+  // vale APENAS nas rotas de dados da squad — nunca em Console/Gestão, para não
+  // bloquear as escritas administrativas legítimas do próprio CTO.
   const auditarSquad = c.req.header("x-auditar-squad");
-  if (auditarSquad && me.papel === "cto") {
+  const rotaAdmin = /\/(console|gestao|convites|onboarding)(\/|$)/.test(c.req.path);
+  if (auditarSquad && me.papel === "cto" && !rotaAdmin) {
     if (c.req.method !== "GET") {
       return c.json({ error: "modo auditoria: somente leitura — saia da auditoria para editar" }, 403);
     }
