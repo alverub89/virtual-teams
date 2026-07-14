@@ -108,12 +108,46 @@ export async function seedDemoSquad(db: any, pessoaId: string) {
     const krRow = (await db.select().from(s.keyResult)).find((k: any) => okrsSquad.includes(k.okrId));
     const [run] = await db.insert(s.execucaoAutonoma).values({ squadId: sqId, krId: krRow?.id ?? null, objetivo: "Migrar recorrencias piloto para PIX Automatico", status: "aguardando_aprovacao", passoAtual: 3, tokensGastos: 45000, tetoTokens: 200000, criadoPor: me.id }).returning();
     await db.insert(s.execucaoPasso).values([
-      { execucaoId: run.id, ordem: 1, nome: "Planejamento da migracao", agenteNome: "Agente PM", tipo: "automatica", status: "concluido", saida: { resumo: "Plano em 3 ondas por porte de cliente", itens: ["Onda 1: MEIs", "Onda 2: PMEs", "Onda 3: grandes contas"] }, concluidoEm: new Date() },
-      { execucaoId: run.id, ordem: 2, nome: "Analise de impacto tecnico", agenteNome: "Agente Arquiteto", tipo: "automatica", status: "concluido", saida: { resumo: "Impacto baixo; reuso do servico de consentimento", itens: ["Sem breaking change", "Rollback por feature flag"] }, concluidoEm: new Date() },
+      { execucaoId: run.id, ordem: 1, nome: "Planejamento da migracao", agenteNome: "Agente PM", tipo: "automatica", status: "concluido", saida: { resumo: "Plano em 3 ondas por porte de cliente", itens: ["Onda 1: MEIs", "Onda 2: PMEs", "Onda 3: grandes contas"], revisao: { nota: 9, rodadas: 1, problemas: [] } }, concluidoEm: new Date() },
+      { execucaoId: run.id, ordem: 2, nome: "Analise de impacto tecnico", agenteNome: "Agente Arquiteto", tipo: "automatica", status: "concluido", saida: { resumo: "Impacto baixo; reuso do servico de consentimento", itens: ["Sem breaking change", "Rollback por feature flag"], revisao: { nota: 7, rodadas: 2, problemas: ["Faltava plano de rollback explicito — corrigido na 2a rodada"] } }, concluidoEm: new Date() },
       { execucaoId: run.id, ordem: 3, nome: "Aprovar plano de migracao", tipo: "checkpoint", status: "aguardando" },
       { execucaoId: run.id, ordem: 4, nome: "Executar migracao piloto", agenteNome: "Agente Dev", tipo: "automatica", status: "pendente" },
     ]);
     await db.insert(s.execucaoCheckpoint).values({ execucaoId: run.id, passoOrdem: 3, titulo: "Aprovar plano de migracao", resumo: "Revisar as 3 ondas antes de executar o piloto com MEIs.", status: "aberto" });
+  }
+
+  // Tool publicada por uma squad, aguardando aprovacao do CTO (para o CTO poder
+  // exercer o fluxo de governanca sem precisar logar como membro de squad).
+  if (!(await db.select().from(s.tool)).some((t: any) => t.squadId === sqId && t.aprovacao === "pendente")) {
+    await db.insert(s.tool).values({
+      nome: "consultar_limite_pix",
+      descricao: "Consulta o limite de PIX disponivel de um cliente antes de agendar a recorrencia",
+      permissao: "leitura",
+      execucao: "http",
+      parametros: "clienteId (obrigatorio), canal",
+      inputSchema: { type: "object", properties: { clienteId: { type: "string" }, canal: { type: "string" } }, required: ["clienteId"] },
+      squadId: sqId,
+      aprovacao: "pendente",
+      criadoPor: pm.id,
+      submetidoEm: new Date(),
+    });
+  }
+
+  // Mesa-redonda concluida (para o CTO auditar o debate encadeado + a decisao).
+  if (!(await db.select().from(s.partySessao)).some((p: any) => p.squadId === sqId)) {
+    const [sess] = await db.insert(s.partySessao).values({
+      squadId: sqId,
+      titulo: "PIX Automatico deve ter leaderboard de adesao por gerente?",
+      topico: "Vale expor um ranking de adesao ao PIX Automatico por carteira de gerentes?",
+      status: "concluido",
+      sintese: "## 🎯 Decisao\nRanking **opt-in por regional**, sem exposicao individual publica — foco em meta de carteira, nao competicao entre pessoas.\n\n## ✅ Acordos\n- Metrica: % de recorrencias migradas por regional\n- Atualizacao semanal\n\n## ⚖️ Divergencias\n- Exposicao individual (rejeitada por risco de pressao indevida)\n\n## ▶️ Proximos passos\n1. Definir corte de regional (PM)\n2. Evento de telemetria de adesao (Dev)",
+      criadoPor: me.id,
+    }).returning();
+    await db.insert(s.partyTurno).values([
+      { sessaoId: sess.id, ordem: 1, agenteNome: "Agente PM", emoji: "📋", conteudo: "Proponho ranking por regional, nao por pessoa: mede adesao da carteira sem expor gerente individual." },
+      { sessaoId: sess.id, ordem: 2, agenteNome: "Agente Arquiteto", emoji: "🏛️", conteudo: "Pegando o que o PM disse: agrego a telemetria por regional no evento de adesao que ja existe — custo zero de infra, sem PII individual." },
+      { sessaoId: sess.id, ordem: 3, agenteNome: "Consolidação — rodada 1", emoji: "🧩", conteudo: "**Decidido:** ranking opt-in por regional, semanal, sem exposicao individual.\n\n**Ainda em aberto:** corte exato de regional." },
+    ]);
   }
 
   // Documentos + KB
