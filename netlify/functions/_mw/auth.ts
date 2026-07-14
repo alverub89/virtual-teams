@@ -49,17 +49,16 @@ export const auth: MiddlewareHandler = async (c, next) => {
     return c.json({ error: "sessão inválida ou expirada" }, 401);
   }
 
-  // "Auditar como squad": só o CTO pode assumir a visão de uma squad, e
-  // somente em leitura (GET). O header vem do front (modo auditoria). A trava
-  // vale APENAS nas rotas de dados da squad — nunca em Console/Gestão, para não
-  // bloquear as escritas administrativas legítimas do próprio CTO.
-  const auditarSquad = c.req.header("x-auditar-squad");
+  // "Auditar como squad": o alvo vem do COOKIE ASSINADO (me.auditSquadId), não
+  // de um header do cliente — não dá para forjar nem ligar sozinho. Só vale se
+  // a sessão é de fato do CTO. Trava de escrita (403) APENAS nas rotas de dados
+  // da squad; Console/Gestão do próprio CTO seguem livres.
   const rotaAdmin = /\/(console|gestao|convites|onboarding)(\/|$)/.test(c.req.path);
-  if (auditarSquad && me.papel === "cto" && !rotaAdmin) {
+  if (me.auditSquadId && me.papel === "cto" && !rotaAdmin) {
     if (c.req.method !== "GET") {
       return c.json({ error: "modo auditoria: somente leitura — saia da auditoria para editar" }, 403);
     }
-    me = { ...me, squadId: auditarSquad, auditando: true };
+    me = { ...me, squadId: me.auditSquadId, auditando: true };
   }
 
   c.set("me", me);

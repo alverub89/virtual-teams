@@ -46,7 +46,9 @@ export const Me = z.object({
   comunidadeId: z.string().nullable(),
   onboardingConcluido: z.boolean(),
   escopos: z.array(Escopo),
-  // true quando o CTO está com a visão de uma squad em modo auditoria (leitura).
+  // Modo auditoria assinado no servidor: quando o CTO audita uma squad, o
+  // próprio cookie carrega o alvo. `auditando` é o flag derivado em runtime.
+  auditSquadId: z.string().nullable().optional(),
   auditando: z.boolean().optional(),
 });
 export type Me = z.infer<typeof Me>;

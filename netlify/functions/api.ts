@@ -81,6 +81,40 @@ app.get("/me/squads", async (c) => {
   const squads = await db.select().from(schema.squad);
   return c.json({ squads: squads.map((s: any) => ({ id: s.id, nome: s.nome })) });
 });
+
+// Liga/desliga o modo auditoria REEMITINDO o cookie de sessão. O alvo e o
+// "somente leitura" passam a viver no token assinado — não é flag de cliente.
+app.post("/me/audit/start", async (c) => {
+  const me = c.get("me");
+  if (me.papel !== "cto") return c.json({ error: "apenas o CTO pode auditar squads" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const squadId = typeof body?.squadId === "string" ? body.squadId : null;
+  if (!squadId) return c.json({ error: "squadId obrigatório" }, 400);
+  const { getDb, schema } = await import("../../db/client");
+  const { eq } = await import("drizzle-orm");
+  const db = await getDb();
+  const [sq] = await db.select().from(schema.squad).where(eq(schema.squad.id, squadId));
+  if (!sq) return c.json({ error: "squad não encontrada" }, 404);
+  const { setCookie } = await import("hono/cookie");
+  const { signSession, cookieOpts, sessionCookieName } = await import("./_mw/auth");
+  const { meDaPessoa } = await import("./_routes/auth");
+  const [p] = await db.select().from(schema.pessoa).where(eq(schema.pessoa.id, me.id));
+  const base = await meDaPessoa(db, p); // identidade real do CTO (sem override)
+  setCookie(c, sessionCookieName, await signSession({ ...base, auditSquadId: squadId }), cookieOpts());
+  return c.json({ ok: true, auditSquadId: squadId, squadNome: sq.nome });
+});
+app.post("/me/audit/stop", async (c) => {
+  const me = c.get("me");
+  const { getDb, schema } = await import("../../db/client");
+  const { eq } = await import("drizzle-orm");
+  const db = await getDb();
+  const { setCookie } = await import("hono/cookie");
+  const { signSession, cookieOpts, sessionCookieName } = await import("./_mw/auth");
+  const { meDaPessoa } = await import("./_routes/auth");
+  const [p] = await db.select().from(schema.pessoa).where(eq(schema.pessoa.id, me.id));
+  setCookie(c, sessionCookieName, await signSession(await meDaPessoa(db, p)), cookieOpts());
+  return c.json({ ok: true });
+});
 app.route("/onboarding", onboarding);
 app.route("/convites", convites);
 app.route("/iniciativas", iniciativas);

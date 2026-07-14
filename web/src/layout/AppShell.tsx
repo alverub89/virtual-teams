@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NavSection } from "../routes/nav";
-import { api, getAuditSquad, post, setAuditSquad, useMe } from "../lib/api";
+import { api, post, useMe } from "../lib/api";
 
 const iniciais = (nome: string) =>
   nome.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -20,15 +19,9 @@ export default function AppShell({
   const qc = useQueryClient();
   const { data: me } = useMe();
 
-  // Estado da auditoria (para o CTO): sem squad escolhida, mostramos um convite
-  // claro em vez de páginas vazias (que pareciam "tela em branco").
-  const [auditSq, setAuditSq] = useState(getAuditSquad());
-  useEffect(() => {
-    const h = () => setAuditSq(getAuditSquad());
-    window.addEventListener("aiw-audit-change", h);
-    return () => window.removeEventListener("aiw-audit-change", h);
-  }, []);
-  const precisaEscolherSquad = audit && me?.papel === "cto" && !auditSq;
+  // O modo auditoria vem do cookie assinado (me.auditSquadId). Sem squad
+  // escolhida, mostramos um convite claro em vez de páginas vazias.
+  const precisaEscolherSquad = audit && me?.papel === "cto" && !me?.auditSquadId;
 
   const sair = async () => {
     await post("/auth/logout");
@@ -97,49 +90,50 @@ export default function AppShell({
   );
 }
 
-// Barra de "auditar como squad": só o CTO vê. Escolhe uma squad e passa a
-// enxergar a área com a visão dela, em modo leitura.
+// Barra de "auditar como squad": liga/desliga o MODO DE SESSÃO no servidor
+// (reemite o cookie). O estado atual vem de me.auditSquadId, não do cliente.
 function AuditBar() {
   const qc = useQueryClient();
-  const [atual, setAtual] = useState(getAuditSquad());
+  const { data: me } = useMe();
   const { data } = useQuery<{ squads: { id: string; nome: string }[] }>({
     queryKey: ["me-squads"],
     queryFn: () => api("/me/squads"),
     staleTime: 60_000,
   });
+  const atualId = me?.auditSquadId ?? "";
+  const atualNome = data?.squads.find((s) => s.id === atualId)?.nome ?? me?.squadNome ?? "";
 
-  useEffect(() => {
-    const h = () => setAtual(getAuditSquad());
-    window.addEventListener("aiw-audit-change", h);
-    return () => window.removeEventListener("aiw-audit-change", h);
-  }, []);
-
-  const escolher = (id: string) => {
-    const sq = data?.squads.find((s) => s.id === id) ?? null;
-    setAuditSquad(sq);
-    qc.invalidateQueries(); // refaz tudo com o novo header
-  };
+  const refazTudo = () => { qc.invalidateQueries({ queryKey: ["me"] }); qc.invalidateQueries(); };
+  const iniciar = useMutation({
+    mutationFn: (squadId: string) => post("/me/audit/start", { squadId }),
+    onSuccess: refazTudo,
+  });
+  const encerrar = useMutation({
+    mutationFn: () => post("/me/audit/stop"),
+    onSuccess: refazTudo,
+  });
+  const ocupado = iniciar.isPending || encerrar.isPending;
 
   return (
-    <div className={`audit-bar ${atual ? "on" : ""}`}>
+    <div className={`audit-bar ${atualId ? "on" : ""}`}>
       <span className="audit-icon">🔍</span>
-      {atual ? (
+      {atualId ? (
         <>
-          <b>Auditando como {atual.nome}</b>
-          <span className="audit-note">visão somente leitura — você não altera nada da squad</span>
+          <b>Auditando como {atualNome}</b>
+          <span className="audit-note">visão somente leitura — o servidor bloqueia qualquer alteração da squad</span>
         </>
       ) : (
         <span className="audit-note">Auditar como squad — veja a plataforma pela ótica de uma squad</span>
       )}
       <div className="spacer" />
-      <select className="in" value={atual?.id ?? ""} onChange={(e) => escolher(e.target.value)} style={{ maxWidth: 220 }}>
+      <select className="in" value={atualId} disabled={ocupado} onChange={(e) => e.target.value && iniciar.mutate(e.target.value)} style={{ maxWidth: 220 }}>
         <option value="">— escolher squad —</option>
         {data?.squads.map((s) => (
           <option key={s.id} value={s.id}>{s.nome}</option>
         ))}
       </select>
-      {atual && (
-        <button className="btn" onClick={() => { setAuditSquad(null); qc.invalidateQueries(); }}>Sair da auditoria</button>
+      {atualId && (
+        <button className="btn" disabled={ocupado} onClick={() => encerrar.mutate()}>Sair da auditoria</button>
       )}
     </div>
   );
