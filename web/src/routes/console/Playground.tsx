@@ -127,7 +127,7 @@ export default function Playground() {
             e recebe o dado de verdade. Cada tool também é chamável por qualquer cliente MCP externo no endpoint gerado.
           </p>
           <ul className="sub" style={{ paddingLeft: 18, marginTop: 8, lineHeight: 1.8 }}>
-            <li>💳 <b>listar_bancos</b> · <b>consultar_banco</b> — bancos do Brasil (ex.: 341 = Itaú)</li>
+            <li>💳 <b>listar_bancos</b> · <b>consultar_banco</b> — bancos do Brasil pelo código de compensação</li>
             <li>⚡ <b>participantes_pix</b> — instituições integradas ao PIX</li>
             <li>📍 <b>consultar_cep</b> · 🏢 <b>consultar_cnpj</b> — dados cadastrais</li>
             <li>💱 <b>cotacao_moeda</b> — câmbio USD→BRL ao vivo · 📈 <b>taxas_juros</b> — Selic/CDI/IPCA</li>

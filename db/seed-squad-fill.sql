@@ -9,7 +9,7 @@
 --
 -- Senha de todos os usuarios de demo: Demo@2026
 -- Emails: ana.souza / bruno.lima / carla.nunes / diego.alves / eduardo.ramos
---         @itau-demo.com   (rubens continua com a sua senha atual)
+--         @acme-demo.com   (rubens continua com a sua senha atual)
 -- ============================================================================
 DO $$
 DECLARE
@@ -24,30 +24,30 @@ BEGIN
   IF v_squad IS NULL THEN RAISE EXCEPTION 'Rubens sem squad_id — rode o seed da squad antes.'; END IF;
 
   -- ---------- TIME (idempotente por email) ----------
-  SELECT id INTO v_pm FROM ai_workspace.pessoa WHERE lower(email)=lower('ana.souza@itau-demo.com');
+  SELECT id INTO v_pm FROM ai_workspace.pessoa WHERE lower(email)=lower('ana.souza@acme-demo.com');
   IF v_pm IS NULL THEN
     INSERT INTO ai_workspace.pessoa(nome,email,senha_hash,papel,comunidade_id,squad_id,onboarding_concluido)
-    VALUES ('Ana Souza','ana.souza@itau-demo.com',v_hash,'pm',v_com,v_squad,true) RETURNING id INTO v_pm;
+    VALUES ('Ana Souza','ana.souza@acme-demo.com',v_hash,'pm',v_com,v_squad,true) RETURNING id INTO v_pm;
   END IF;
-  SELECT id INTO v_dev1 FROM ai_workspace.pessoa WHERE lower(email)=lower('bruno.lima@itau-demo.com');
+  SELECT id INTO v_dev1 FROM ai_workspace.pessoa WHERE lower(email)=lower('bruno.lima@acme-demo.com');
   IF v_dev1 IS NULL THEN
     INSERT INTO ai_workspace.pessoa(nome,email,senha_hash,papel,comunidade_id,squad_id,onboarding_concluido)
-    VALUES ('Bruno Lima','bruno.lima@itau-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev1;
+    VALUES ('Bruno Lima','bruno.lima@acme-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev1;
   END IF;
-  SELECT id INTO v_dev2 FROM ai_workspace.pessoa WHERE lower(email)=lower('carla.nunes@itau-demo.com');
+  SELECT id INTO v_dev2 FROM ai_workspace.pessoa WHERE lower(email)=lower('carla.nunes@acme-demo.com');
   IF v_dev2 IS NULL THEN
     INSERT INTO ai_workspace.pessoa(nome,email,senha_hash,papel,comunidade_id,squad_id,onboarding_concluido)
-    VALUES ('Carla Nunes','carla.nunes@itau-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev2;
+    VALUES ('Carla Nunes','carla.nunes@acme-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev2;
   END IF;
-  SELECT id INTO v_dev3 FROM ai_workspace.pessoa WHERE lower(email)=lower('diego.alves@itau-demo.com');
+  SELECT id INTO v_dev3 FROM ai_workspace.pessoa WHERE lower(email)=lower('diego.alves@acme-demo.com');
   IF v_dev3 IS NULL THEN
     INSERT INTO ai_workspace.pessoa(nome,email,senha_hash,papel,comunidade_id,squad_id,onboarding_concluido)
-    VALUES ('Diego Alves','diego.alves@itau-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev3;
+    VALUES ('Diego Alves','diego.alves@acme-demo.com',v_hash,'dev',v_com,v_squad,true) RETURNING id INTO v_dev3;
   END IF;
-  SELECT id INTO v_gestor FROM ai_workspace.pessoa WHERE lower(email)=lower('eduardo.ramos@itau-demo.com');
+  SELECT id INTO v_gestor FROM ai_workspace.pessoa WHERE lower(email)=lower('eduardo.ramos@acme-demo.com');
   IF v_gestor IS NULL THEN
     INSERT INTO ai_workspace.pessoa(nome,email,senha_hash,papel,comunidade_id,squad_id,onboarding_concluido)
-    VALUES ('Eduardo Ramos','eduardo.ramos@itau-demo.com',v_hash,'gestao',v_com,NULL,true) RETURNING id INTO v_gestor;
+    VALUES ('Eduardo Ramos','eduardo.ramos@acme-demo.com',v_hash,'gestao',v_com,NULL,true) RETURNING id INTO v_gestor;
   END IF;
 
   -- ---------- capacidade + repositorio ----------
@@ -58,7 +58,7 @@ BEGIN
   END IF;
   SELECT id INTO v_repo FROM ai_workspace.repositorio WHERE squad_id = v_squad LIMIT 1;
   IF v_repo IS NULL THEN
-    INSERT INTO ai_workspace.repositorio(squad_id, nome) VALUES (v_squad, 'itau/pix-cobranca') RETURNING id INTO v_repo;
+    INSERT INTO ai_workspace.repositorio(squad_id, nome) VALUES (v_squad, 'acme/pix-cobranca') RETURNING id INTO v_repo;
   END IF;
 
   -- ---------- iniciativas + etapas + historias (distribuidas no time) ----------
@@ -90,9 +90,9 @@ BEGIN
       (v_ini2, 'PIXCOB-091', 'Liquidacao por vendedor', 5, 'concluida', v_dev2);
 
     INSERT INTO ai_workspace.execucao_esteira(squad_id, iniciativa_id, repositorio, etapa, status, detalhe) VALUES
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'build', 'ok', 'build #128 verde'),
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'testes', 'ok', 'cobertura 87%'),
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'seguranca', 'em_execucao', 'SAST em andamento');
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'build', 'ok', 'build #128 verde'),
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'testes', 'ok', 'cobertura 87%'),
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'seguranca', 'em_execucao', 'SAST em andamento');
     INSERT INTO ai_workspace.gmud(squad_id, iniciativa_id, numero, titulo, status, risco, janela)
     VALUES (v_squad, v_ini1, 'CHG-2026-0912', 'Deploy PIX Automatico - fase 1', 'aguardando_aprovacao', 'medio', '2026-07-20 02:00 as 04:00');
     INSERT INTO ai_workspace.pull_request(repositorio_id, iniciativa_id, numero, titulo, autor_nome, status) VALUES

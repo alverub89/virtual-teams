@@ -145,7 +145,7 @@ export default function Lab() {
       {agente && (
         <Modal title={`🤖 Agente · ${agente.nome}`} subtitle="Descreva o objetivo. O agente escolhe e aciona as tools do MCP para cumprir." onClose={() => setAgente(null)}
           foot={<><Button onClick={() => setAgente(null)}>Fechar</Button><Button variant="primary" onClick={() => objetivo.length >= 4 && rodarAgente.mutate()}>{rodarAgente.isPending ? "Acionando…" : "Executar"}</Button></>}>
-          <Fld label="Objetivo"><textarea className="in" rows={2} value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Ex.: liste os bancos e me diga o código do Itaú" /></Fld>
+          <Fld label="Objetivo"><textarea className="in" rows={2} value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Ex.: liste os bancos e me diga o código de um banco" /></Fld>
           {resultado && (
             <>
               <div className="sec-title" style={{ marginTop: 8 }}>Passos do agente</div>

@@ -17,7 +17,7 @@ web/                  SPA React + Vite (tokens e shell portados do protótipo)
 netlify/functions/    API Hono (/api/*), background e scheduled functions
 db/                   Drizzle (schema ai_workspace) + migrations
 ai/                   Adapter LLMProvider + roteador de modelos + prompts
-integrations/         Adapters de tools (GitHub, IU Click, Atlan, ServiceNow, Catálogo)
+integrations/         Adapters de tools (GitHub, board, Atlan, ServiceNow, Catálogo)
 shared/               Tipos + schemas Zod compartilhados (web ↔ functions)
 docs/                 Spec + protótipo (referência viva)
 ```
@@ -68,5 +68,5 @@ Netlify apontado para este repo — build da SPA + Functions já configurados.
 
 Pendências para produção (detalhe em `docs/plano-de-implementacao.md`):
 provisionamento (Neon com o schema canônico, OAuth, provedor de IA), tools
-reais das integrações (GitHub App, IU Click, Atlan, ServiceNow), RLS, rate
+reais das integrações (GitHub App, board, Atlan, ServiceNow), RLS, rate
 limiting e testes e2e contínuos.

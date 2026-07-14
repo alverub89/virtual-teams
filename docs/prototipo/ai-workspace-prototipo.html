@@ -504,7 +504,7 @@ textarea.in{resize:vertical;min-height:70px}
       </button>
       <button class="btn-sso" onclick="showToast('🔑 Redirecionando para o SSO corporativo (Azure AD)…')">🔑 SSO corporativo (Azure AD)</button>
       <div class="login-div">acesso via organização</div>
-      <p class="login-note">Você entra com o GitHub Enterprise da organização <b>itau-meios-pagamento</b>. A AI Workspace usa esse acesso para ler seus repositórios, esteiras e squads — sempre respeitando suas permissões.</p>
+      <p class="login-note">Você entra com o GitHub Enterprise da organização <b>acme-meios-pagamento</b>. A AI Workspace usa esse acesso para ler seus repositórios, esteiras e squads — sempre respeitando suas permissões.</p>
     </div>
     <div class="login-foot">Protótipo conceitual · o login é simulado</div>
   </div>
@@ -538,7 +538,7 @@ textarea.in{resize:vertical;min-height:70px}
     </div>
   </div>
   <div class="entry-foot" style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap">
-    <span>🐙 Autenticado via GitHub como <b style="color:#fff">@rubao</b> · itau-meios-pagamento</span>
+    <span>🐙 Autenticado via GitHub como <b style="color:#fff">@rubao</b> · acme-meios-pagamento</span>
     <span class="logout-link" onclick="logout()">⎋ Sair</span>
   </div>
   <div class="entry-foot" style="padding-top:0">AI Workspace · protótipo conceitual v0.1 · frente AI-First · dados ilustrativos</div>
@@ -550,7 +550,7 @@ textarea.in{resize:vertical;min-height:70px}
 <div class="app" id="app-squad">
   <div class="topbar">
     <span class="brand" onclick="showApp('screen-entry')"><span class="logo">AI</span>AI Workspace <small>Squad</small></span>
-    <button class="ctx-switch" onclick="showPage('app-squad','pg-comunidade')" data-tip="Comunidade → Release Train → Squad · sincronizado com o IU Click">Comunidade <b>Meios de Pagamento</b> <span style="opacity:.45">›</span> RT <b>Adquirência</b> <span style="opacity:.45">›</span> <b>Squad Pagamentos</b> ▾</button>
+    <button class="ctx-switch" onclick="showPage('app-squad','pg-comunidade')" data-tip="Comunidade → Release Train → Squad · sincronizado com o board">Comunidade <b>Meios de Pagamento</b> <span style="opacity:.45">›</span> RT <b>Adquirência</b> <span style="opacity:.45">›</span> <b>Squad Pagamentos</b> ▾</button>
     <span class="spacer"></span>
     <button class="persona-chip" onclick="showApp('screen-entry')" data-tip="Trocar de visão (voltar à entrada)"><span class="avatar" style="background:#b85700">AS</span> Ana Souza · PM ▾</button>
   </div>
@@ -589,7 +589,7 @@ textarea.in{resize:vertical;min-height:70px}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
         Esteira &amp; GMUDs <span class="mini-badge">1</span></button>
       <div class="side-label">Conectado via MCP</div>
-      <div class="side-item" style="cursor:default"><span class="dot" style="background:var(--good)"></span> IU Click · comunidade &amp; histórias</div>
+      <div class="side-item" style="cursor:default"><span class="dot" style="background:var(--good)"></span> board · comunidade &amp; histórias</div>
       <div class="side-item" style="cursor:default"><span class="dot" style="background:var(--good)"></span> GitHub · 4 repositórios</div>
       <div class="side-item" style="cursor:default"><span class="dot" style="background:var(--good)"></span> Atlan · metadados</div>
       <div class="side-item" style="cursor:default"><span class="dot" style="background:var(--good)"></span> ServiceNow · GMUD</div>
@@ -605,7 +605,7 @@ textarea.in{resize:vertical;min-height:70px}
             <div>
               <div class="crumbs">Comunidade</div>
               <h1>Comunidade Meios de Pagamento</h1>
-              <p>3 release trains · 9 squads · estrutura e histórias sincronizadas com o <b>IU Click</b></p>
+              <p>3 release trains · 9 squads · estrutura e histórias sincronizadas com o <b>board</b></p>
             </div>
             <div class="actions"><span class="chip neutral">🔒 Consulta</span></div>
           </div>
@@ -639,7 +639,7 @@ textarea.in{resize:vertical;min-height:70px}
                 <div class="squad-row"><span class="sq-name">Squad Iniciação de Pagamento</span><span class="sq-meta">2 sistemas · 2 iniciativas</span><span class="sq-act"><span class="chip neutral">🔒 consulta</span></span></div>
               </div>
             </div>
-            <p class="muted" style="margin-top:12px">Estrutura mantida no <b>IU Click</b> · a AI Workspace lê a hierarquia via MCP e aplica as permissões: você cria na sua squad, consulta o resto.</p>
+            <p class="muted" style="margin-top:12px">Estrutura mantida no <b>board</b> · a AI Workspace lê a hierarquia via MCP e aplica as permissões: você cria na sua squad, consulta o resto.</p>
           </div>
 
           <!-- aba documentação da comunidade -->
@@ -783,7 +783,7 @@ textarea.in{resize:vertical;min-height:70px}
             <button class="step done" onclick="showStage('brief',this)"><span class="st-idx">✓</span><span class="st-label">1 · Brief</span><span class="st-meta">Agente Analista</span></button>
             <button class="step done" onclick="showStage('prd',this)"><span class="st-idx">✓</span><span class="st-label">2 · PRD</span><span class="st-meta">Agente PM</span></button>
             <button class="step done" onclick="showStage('arq',this)"><span class="st-idx">✓</span><span class="st-label">3 · Arquitetura</span><span class="st-meta">Agente Arquiteto</span></button>
-            <button class="step done" onclick="showStage('hist',this)"><span class="st-idx">✓</span><span class="st-label">4 · Histórias</span><span class="st-meta">Agente SM · IU Click</span></button>
+            <button class="step done" onclick="showStage('hist',this)"><span class="st-idx">✓</span><span class="st-label">4 · Histórias</span><span class="st-meta">Agente SM · board</span></button>
             <button class="step doing sel" onclick="showStage('dev',this)"><span class="st-idx">5</span><span class="st-label">5 · Desenvolvimento</span><span class="st-meta">Agente Dev · GitHub</span></button>
             <button class="step" onclick="showStage('gmud',this)"><span class="st-idx">6</span><span class="st-label">6 · Esteira &amp; GMUD</span><span class="st-meta">CI/CD · ServiceNow</span></button>
           </div>
@@ -882,15 +882,15 @@ textarea.in{resize:vertical;min-height:70px}
               <div class="stage-block" id="stage-hist">
                 <div class="card card-pad">
                   <h3>🧩 Histórias &amp; backlog <span class="chip good" style="margin-left:6px">Sincronizado</span></h3>
-                  <p class="sub">O Agente SM quebrou o PRD em 8 histórias com critérios de aceite — tudo espelhado no IU Click via MCP</p>
+                  <p class="sub">O Agente SM quebrou o PRD em 8 histórias com critérios de aceite — tudo espelhado no board via MCP</p>
                   <div class="grid" style="gap:8px">
-                    <div class="story"><span class="s-id">AIW-231.1</span><span class="s-title">Motor de regras de split por parceiro<small>RF-01 · critérios de aceite: 6</small></span><span class="pts">8 pts</span><span class="chip good">✓ Concluída</span><span class="chip blue" data-tip="Espelhada no IU Click via MCP — status sincronizado nos dois sentidos">IU Click ⇄</span></div>
-                    <div class="story"><span class="s-id">AIW-231.2</span><span class="s-title">Split na captura com publicação de evento<small>RF-02 · critérios de aceite: 5</small></span><span class="pts">5 pts</span><span class="chip good">✓ Concluída</span><span class="chip blue">IU Click ⇄</span></div>
-                    <div class="story"><span class="s-id">AIW-231.3</span><span class="s-title">Lançamentos de split no ledger com auditoria<small>RF-03 · critérios de aceite: 7</small></span><span class="pts">8 pts</span><span class="chip blue">⚙ Em dev</span><span class="chip blue">IU Click ⇄</span></div>
-                    <div class="story"><span class="s-id">AIW-231.4</span><span class="s-title">Extrato de repasses no portal do lojista<small>RF-04 · critérios de aceite: 4</small></span><span class="pts">5 pts</span><span class="chip blue">⚙ Em dev</span><span class="chip blue">IU Click ⇄</span></div>
-                    <div class="story"><span class="s-id">AIW-231.5</span><span class="s-title">Idempotência e reprocessamento de liquidação<small>NFR-02 · critérios de aceite: 5</small></span><span class="pts">5 pts</span><span class="chip neutral">A fazer</span><span class="chip blue">IU Click ⇄</span></div>
+                    <div class="story"><span class="s-id">AIW-231.1</span><span class="s-title">Motor de regras de split por parceiro<small>RF-01 · critérios de aceite: 6</small></span><span class="pts">8 pts</span><span class="chip good">✓ Concluída</span><span class="chip blue" data-tip="Espelhada no board via MCP — status sincronizado nos dois sentidos">board ⇄</span></div>
+                    <div class="story"><span class="s-id">AIW-231.2</span><span class="s-title">Split na captura com publicação de evento<small>RF-02 · critérios de aceite: 5</small></span><span class="pts">5 pts</span><span class="chip good">✓ Concluída</span><span class="chip blue">board ⇄</span></div>
+                    <div class="story"><span class="s-id">AIW-231.3</span><span class="s-title">Lançamentos de split no ledger com auditoria<small>RF-03 · critérios de aceite: 7</small></span><span class="pts">8 pts</span><span class="chip blue">⚙ Em dev</span><span class="chip blue">board ⇄</span></div>
+                    <div class="story"><span class="s-id">AIW-231.4</span><span class="s-title">Extrato de repasses no portal do lojista<small>RF-04 · critérios de aceite: 4</small></span><span class="pts">5 pts</span><span class="chip blue">⚙ Em dev</span><span class="chip blue">board ⇄</span></div>
+                    <div class="story"><span class="s-id">AIW-231.5</span><span class="s-title">Idempotência e reprocessamento de liquidação<small>NFR-02 · critérios de aceite: 5</small></span><span class="pts">5 pts</span><span class="chip neutral">A fazer</span><span class="chip blue">board ⇄</span></div>
                   </div>
-                  <p class="muted" style="margin-top:10px">+ 3 histórias no backlog · estimativa da onda: 42 pontos · <a style="color:var(--accent);cursor:pointer">abrir board no IU Click ↗</a></p>
+                  <p class="muted" style="margin-top:10px">+ 3 histórias no backlog · estimativa da onda: 42 pontos · <a style="color:var(--accent);cursor:pointer">abrir board no board ↗</a></p>
                 </div>
               </div>
 
@@ -1004,11 +1004,11 @@ textarea.in{resize:vertical;min-height:70px}
               </div>
               <!-- chat: hist -->
               <div class="card chat chat-pane" id="chat-hist" style="display:none">
-                <div class="chat-head"><span class="avatar" style="background:#b85700">🧩</span><span class="info"><b>Agente SM</b><span>Etapa de Histórias · sync IU Click</span></span><span class="chip neutral">etapa 4</span></div>
+                <div class="chat-head"><span class="avatar" style="background:#b85700">🧩</span><span class="info"><b>Agente SM</b><span>Etapa de Histórias · sync board</span></span><span class="chip neutral">etapa 4</span></div>
                 <div class="chat-body" id="chatbody-hist">
-                  <div class="msg"><div class="bubble"><b class="who">Agente SM</b>Quebrei o PRD em 8 histórias com critérios de aceite e estimativas. Já sincronizei tudo no board da squad no IU Click — qualquer mudança lá reflete aqui e vice-versa.</div></div>
+                  <div class="msg"><div class="bubble"><b class="who">Agente SM</b>Quebrei o PRD em 8 histórias com critérios de aceite e estimativas. Já sincronizei tudo no board da squad no board — qualquer mudança lá reflete aqui e vice-versa.</div></div>
                   <div class="msg user"><div class="bubble">A AIW-231.3 ficou grande demais, dá pra quebrar?</div></div>
-                  <div class="msg"><div class="bubble"><b class="who">Agente SM</b>Concordo, 8 pontos com 7 critérios é arriscado. Sugiro dividir em "lançamentos de split" (5 pts) e "trilha de auditoria" (3 pts). Quer que eu aplique e atualize o IU Click?</div></div>
+                  <div class="msg"><div class="bubble"><b class="who">Agente SM</b>Concordo, 8 pontos com 7 critérios é arriscado. Sugiro dividir em "lançamentos de split" (5 pts) e "trilha de auditoria" (3 pts). Quer que eu aplique e atualize o board?</div></div>
                 </div>
                 <div class="chat-input"><input id="inp-hist" placeholder="Refinar histórias com o agente…" onkeydown="keySend(event,'hist')"><button class="btn primary" onclick="sendMsg('hist')">➤</button></div>
               </div>
@@ -1018,7 +1018,7 @@ textarea.in{resize:vertical;min-height:70px}
                 <div class="chat-body" id="chatbody-dev">
                   <div class="msg"><div class="bubble"><b class="who">Agente Dev</b>Status: 3 PRs prontos, 1 em draft. No ms-ledger os testes e2e estão rodando — estimativa de 8 min. A cobertura ficou em 94% no split-engine, acima do gate de 80%.</div></div>
                   <div class="msg user"><div class="bubble">O extrato do lojista precisa mostrar o valor bruto e o líquido de cada perna.</div></div>
-                  <div class="msg"><div class="bubble"><b class="who">Agente Dev</b>Boa! Isso toca o web-portal-lojista e o contrato do ms-split-engine. Atualizei o PR #221 com os dois campos e adicionei teste de UI. O critério de aceite da AIW-231.4 foi atualizado e re-sincronizado no IU Click.</div></div>
+                  <div class="msg"><div class="bubble"><b class="who">Agente Dev</b>Boa! Isso toca o web-portal-lojista e o contrato do ms-split-engine. Atualizei o PR #221 com os dois campos e adicionei teste de UI. O critério de aceite da AIW-231.4 foi atualizado e re-sincronizado no board.</div></div>
                 </div>
                 <div class="chat-input"><input id="inp-dev" placeholder="Pedir ajustes ao agente…" onkeydown="keySend(event,'dev')"><button class="btn primary" onclick="sendMsg('dev')">➤</button></div>
               </div>
@@ -1376,7 +1376,7 @@ tx(() => {
                     </div>
                     <div class="run-reason">O PRD amarra o critério de aceite ao KR (splits em D+1). A ADR registra a estratégia de retry com backoff e chave de idempotência por <span class="mono">transaction_id</span>.</div>
                     <div class="run-actions">
-                      <button class="btn primary" onclick="approveGate('run-s5',['run-s6','run-s7'],'✅ Documentação aprovada — backlog criado e sincronizado no IU Click.')">Aprovar documentação</button>
+                      <button class="btn primary" onclick="approveGate('run-s5',['run-s6','run-s7'],'✅ Documentação aprovada — backlog criado e sincronizado no board.')">Aprovar documentação</button>
                       <button class="btn" onclick="showToast('✎ Abrindo os documentos para você editar antes de seguir.')">Ajustar</button>
                     </div>
                   </div>
@@ -1386,8 +1386,8 @@ tx(() => {
                 <div class="run-step done" id="run-s6" style="display:none">
                   <div class="run-node">✓</div>
                   <div class="run-card">
-                    <div class="rc-head"><h4>Criou a iniciativa e o backlog</h4><span class="rc-agent">🧩 Agente SM · IU Click</span></div>
-                    <p>Feature <b>AIW-241</b> criada, associada ao KR de D+1, com histórias sincronizadas no IU Click.</p>
+                    <div class="rc-head"><h4>Criou a iniciativa e o backlog</h4><span class="rc-agent">🧩 Agente SM · board</span></div>
+                    <p>Feature <b>AIW-241</b> criada, associada ao KR de D+1, com histórias sincronizadas no board.</p>
                     <div class="run-out"><span class="chip blue">AIW-241 · Retry de liquidação</span><span class="chip neutral">4 histórias · 21 pts</span><span class="chip neutral">vinculada ao KR (+22pp esperado)</span></div>
                   </div>
                 </div>
@@ -1562,7 +1562,7 @@ tx(() => {
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <div><h3>Repositórios da squad</h3><p class="sub" style="margin-bottom:6px">Conectados do GitHub e associados a uma capacidade e a uma feature — é este mapa que dá contexto aos agentes e transparência à PM</p></div>
                 <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-                  <span class="chip good" data-tip="Organização conectada via MCP GitHub Enterprise">🐙 itau-meios-pagamento · conectado</span>
+                  <span class="chip good" data-tip="Organização conectada via MCP GitHub Enterprise">🐙 acme-meios-pagamento · conectado</span>
                   <button class="btn primary" onclick="openModal('m-github')">🐙 Conectar do GitHub</button>
                 </div>
               </div>
@@ -1596,7 +1596,7 @@ tx(() => {
             <div class="stage-panel">
               <div class="card card-pad">
                 <h3>🧩 AIW-231.3 — Lançamentos de split no ledger com auditoria <span class="chip blue" style="margin-left:6px">Em dev</span></h3>
-                <p class="sub">8 pts · RF-03 · branch <span class="mono">feat/split-ledger-entries</span> · PR #87 em ms-ledger · sincronizada no IU Click</p>
+                <p class="sub">8 pts · RF-03 · branch <span class="mono">feat/split-ledger-entries</span> · PR #87 em ms-ledger · sincronizada no board</p>
                 <hr class="sep">
                 <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:4px">Plano do agente para esta iteração</h4>
                 <div class="plan-item done"><span class="pi-ic">✅</span>Criar entidade SplitLedgerEntry com trilha de auditoria (quem, quando, regra aplicada)</div>
@@ -1621,7 +1621,7 @@ tx(() => {
                 <div class="grid g3">
                   <div class="repo-card"><div class="r-top">🧪 Testes</div><div class="r-meta"><b style="color:var(--good-text)">34 ✓</b> · 2 em execução · cobertura 91%</div></div>
                   <div class="repo-card"><div class="r-top">🛡 Gates da esteira</div><div class="r-meta">SAST ✓ · contrato de API ✓ · review pendente</div></div>
-                  <div class="repo-card"><div class="r-top">🔁 Sync</div><div class="r-meta">IU Click atualizado · critério de aceite 5/7</div></div>
+                  <div class="repo-card"><div class="r-top">🔁 Sync</div><div class="r-meta">board atualizado · critério de aceite 5/7</div></div>
                 </div>
               </div>
             </div>
@@ -1713,7 +1713,7 @@ tx(() => {
             </div>
             <div class="doc-card" onclick="showPage('app-squad','pg-docview')">
               <div class="dc-top"><span class="dc-ic">📄</span><div><h3>PRD — Split de pagamento</h3><div class="dc-meta">Requisitos · v7 · aprovado</div></div></div>
-              <p>12 requisitos funcionais e 4 não-funcionais com critérios de aceite. Fonte da verdade das histórias no IU Click.</p>
+              <p>12 requisitos funcionais e 4 não-funcionais com critérios de aceite. Fonte da verdade das histórias no board.</p>
               <div class="dc-foot"><span class="chip good">✓ em dia</span><span class="chip neutral">AIW-231</span></div>
             </div>
             <div class="doc-card" onclick="showPage('app-squad','pg-docview')">
@@ -2055,7 +2055,7 @@ docker compose up -d kafka postgres
             </div>
           </div>
           <div style="height:14px"></div>
-          <div class="banner">🔎&nbsp;<span><b>Transparência ponta a ponta</b>Toda GMUD aberta pela plataforma referencia a iniciativa, as histórias (IU Click), os PRs (GitHub) e o resultado da esteira. A gestão vê o fluxo completo — de quem pediu à mudança que foi para produção.</span></div>
+          <div class="banner">🔎&nbsp;<span><b>Transparência ponta a ponta</b>Toda GMUD aberta pela plataforma referencia a iniciativa, as histórias (board), os PRs (GitHub) e o resultado da esteira. A gestão vê o fluxo completo — de quem pediu à mudança que foi para produção.</span></div>
         </section>
 
         <!-- ===== métodos ===== -->
@@ -2164,7 +2164,7 @@ docker compose up -d kafka postgres
               <div class="skill-item"><span class="si-ic">💡</span><div class="si-body"><b>Elaborar Brief</b><p>Transforma um problema/oportunidade em brief estruturado com premissas e métricas.</p><div class="si-tools"><span class="pill">🗄 Consultar metadados</span><span class="pill">🔎 Buscar sistema</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">3 agentes</span></div></div>
               <div class="skill-item"><span class="si-ic">📄</span><div class="si-body"><b>Elaborar PRD</b><p>Deriva requisitos funcionais e não-funcionais com critério de aceite, ligados ao OKR.</p><div class="si-tools"><span class="pill">🧩 Sincronizar histórias</span><span class="pill">🗄 Consultar metadados</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">1 agente</span></div></div>
               <div class="skill-item"><span class="si-ic">🏛</span><div class="si-body"><b>Desenhar arquitetura &amp; ADR</b><p>Aplica o blueprint, escolhe repositórios e registra decisões em ADR.</p><div class="si-tools"><span class="pill">📖 Ler repositório</span><span class="pill">🏛 Ler blueprint</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">1 agente</span></div></div>
-              <div class="skill-item"><span class="si-ic">🧩</span><div class="si-body"><b>Quebrar em histórias</b><p>Divide o PRD em histórias estimadas com critério de aceite e sincroniza no IU Click.</p><div class="si-tools"><span class="pill">🧩 Sincronizar histórias</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">2 agentes</span></div></div>
+              <div class="skill-item"><span class="si-ic">🧩</span><div class="si-body"><b>Quebrar em histórias</b><p>Divide o PRD em histórias estimadas com critério de aceite e sincroniza no board.</p><div class="si-tools"><span class="pill">🧩 Sincronizar histórias</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">2 agentes</span></div></div>
               <div class="skill-item"><span class="si-ic">⚙️</span><div class="si-body"><b>Gerar código &amp; PR</b><p>Implementa a história seguindo o blueprint, roda testes e abre PR (sem merge).</p><div class="si-tools"><span class="pill">📖 Ler repositório</span><span class="pill">🔀 Abrir Pull Request</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">1 agente</span></div></div>
               <div class="skill-item"><span class="si-ic">📚</span><div class="si-body"><b>Gerar documentação</b><p>Produz runbook/ADR/README a partir do código e dos artefatos, e mantém em dia.</p><div class="si-tools"><span class="pill">📚 Publicar documentação</span><span class="pill">📖 Ler repositório</span></div></div><div class="si-tools" style="align-self:center"><span class="chip neutral">2 agentes</span></div></div>
             </div>
@@ -2181,7 +2181,7 @@ docker compose up -d kafka postgres
                   <tr><td><b>📖 Ler repositório</b><br><span class="muted">clona e lê código, ADRs e histórico</span></td><td>GitHub Enterprise</td><td><span class="perm leitura">LEITURA</span></td><td class="num">3 agentes</td></tr>
                   <tr><td><b>🔀 Abrir Pull Request</b><br><span class="muted">cria branch e PR — nunca faz merge</span></td><td>GitHub Enterprise</td><td><span class="perm escrita">ESCRITA</span></td><td class="num">1 agente</td></tr>
                   <tr><td><b>🗄 Consultar metadados</b><br><span class="muted">tabelas, PII e linhagem</span></td><td>Atlan</td><td><span class="perm leitura">LEITURA</span></td><td class="num">2 agentes</td></tr>
-                  <tr><td><b>🧩 Sincronizar histórias</b><br><span class="muted">cria e atualiza histórias no board</span></td><td>IU Click</td><td><span class="perm escrita">ESCRITA</span></td><td class="num">2 agentes</td></tr>
+                  <tr><td><b>🧩 Sincronizar histórias</b><br><span class="muted">cria e atualiza histórias no board</span></td><td>board</td><td><span class="perm escrita">ESCRITA</span></td><td class="num">2 agentes</td></tr>
                   <tr><td><b>🔎 Buscar sistema (sigla)</b><br><span class="muted">consulta o catálogo corporativo</span></td><td>Catálogo de Sistemas</td><td><span class="perm leitura">LEITURA</span></td><td class="num">2 agentes</td></tr>
                   <tr><td><b>🏛 Ler blueprint &amp; ADRs</b><br><span class="muted">padrões e regras do domínio</span></td><td>Plataforma</td><td><span class="perm leitura">LEITURA</span></td><td class="num">2 agentes</td></tr>
                   <tr><td><b>📚 Publicar documentação</b><br><span class="muted">grava no repositório de conhecimento</span></td><td>Repositório de conhecimento</td><td><span class="perm escrita">ESCRITA</span></td><td class="num">1 agente</td></tr>
@@ -2225,7 +2225,7 @@ docker compose up -d kafka postgres
               <div class="card card-pad">
                 <h3>Tools <span class="chip neutral" style="margin-left:6px">o que o agente pode acessar</span></h3>
                 <p class="sub" style="margin-bottom:8px">Marque as tools liberadas — a permissão vem da conexão MCP</p>
-                <div class="tool-pick"><input type="checkbox" checked><div><div class="tp-name">🧩 Sincronizar histórias</div><div class="tp-src">IU Click</div></div><span class="perm escrita">ESCRITA</span></div>
+                <div class="tool-pick"><input type="checkbox" checked><div><div class="tp-name">🧩 Sincronizar histórias</div><div class="tp-src">board</div></div><span class="perm escrita">ESCRITA</span></div>
                 <div class="tool-pick"><input type="checkbox" checked><div><div class="tp-name">🗄 Consultar metadados</div><div class="tp-src">Atlan</div></div><span class="perm leitura">LEITURA</span></div>
                 <div class="tool-pick"><input type="checkbox"><div><div class="tp-name">📖 Ler repositório</div><div class="tp-src">GitHub Enterprise</div></div><span class="perm leitura">LEITURA</span></div>
                 <div class="tool-pick"><input type="checkbox"><div><div class="tp-name">🎫 Abrir GMUD</div><div class="tp-src">ServiceNow</div></div><span class="perm critica">AÇÃO CRÍTICA</span></div>
@@ -2241,7 +2241,7 @@ docker compose up -d kafka postgres
 Personalidade: focado em valor e clareza; questiona escopo inflado; obcecado por critério de aceite mensurável; amarra requisitos a um OKR.
 
 <span class="k">Skills:</span> Elaborar PRD, Quebrar em histórias.
-<span class="k">Tools disponíveis:</span> Sincronizar histórias (IU Click · escrita), Consultar metadados (Atlan · leitura).
+<span class="k">Tools disponíveis:</span> Sincronizar histórias (board · escrita), Consultar metadados (Atlan · leitura).
 
 <span class="k">Guard-rails:</span> respeite o blueprint do domínio e a classificação de PII; nunca aprove uma mudança; toda ação de escrita fica registrada.</div>
               </div>
@@ -2266,7 +2266,7 @@ Personalidade: focado em valor e clareza; questiona escopo inflado; obcecado por
           </div>
           <div class="grid g4">
             <div class="card card-pad" style="cursor:pointer" onclick="showToast('⚙️ Abrindo configuração da conexão MCP — escopos, credenciais e permissões.')">
-              <div style="display:flex;align-items:center;gap:9px"><span class="icon-sq">📋</span><div><h3>IU Click</h3><span class="muted">Comunidade · squads · histórias</span></div></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="icon-sq">📋</span><div><h3>board</h3><span class="muted">Comunidade · squads · histórias</span></div></div>
               <hr class="sep"><span class="chip good">● Conectado</span>
               <div class="muted" style="margin-top:8px">Estrutura da comunidade + histórias</div>
             </div>
@@ -2492,7 +2492,7 @@ Personalidade: focado em valor e clareza; questiona escopo inflado; obcecado por
               </tr>
             </tbody>
           </table>
-          <div class="card-pad" style="padding-top:10px"><span class="muted">Mostrando 5 de 14 squads · dados consolidados de IU Click, GitHub e ServiceNow via MCP</span></div>
+          <div class="card-pad" style="padding-top:10px"><span class="muted">Mostrando 5 de 14 squads · dados consolidados de board, GitHub e ServiceNow via MCP</span></div>
         </div>
         </section>
 
@@ -2730,7 +2730,7 @@ Personalidade: focado em valor e clareza; questiona escopo inflado; obcecado por
       <button class="modal-x" onclick="closeModal('m-github')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="hint" style="margin-top:0;margin-bottom:12px">🐙 Organização conectada via MCP: <b>itau-meios-pagamento</b> · 214 repositórios acessíveis. Selecione os que a squad usa.</div>
+      <div class="hint" style="margin-top:0;margin-bottom:12px">🐙 Organização conectada via MCP: <b>acme-meios-pagamento</b> · 214 repositórios acessíveis. Selecione os que a squad usa.</div>
       <div class="fld"><label>Buscar repositório na organização</label>
         <div class="doc-search" style="margin-bottom:10px">🔎 <input placeholder="ex.: ms-notification, web-portal…"></div>
         <div class="gh-repo"><input type="checkbox" checked><div><div class="g-name">📦 ms-notification-svc</div><div class="g-meta">Privado · push há 3h · main</div></div><span class="g-lang"><span class="dot" style="background:var(--accent)"></span> Java</span></div>
@@ -3013,7 +3013,7 @@ Personalidade: focado em valor e clareza; questiona escopo inflado; obcecado por
     <div class="modal-body">
       <div class="fld-row"><div class="fld"><label>Nome</label><input class="in" placeholder="ex.: Consultar observabilidade"></div><div class="fld"><label>Ícone</label><input class="in" value="📈"></div></div>
       <div class="fld"><label>Descrição</label><textarea class="in" placeholder="O que a tool permite fazer no mundo real."></textarea></div>
-      <div class="fld"><label>Conexão MCP <small>· de onde vem a capacidade</small></label><select class="in"><option>GitHub Enterprise</option><option>IU Click</option><option>Atlan</option><option>ServiceNow</option><option>Catálogo de Sistemas</option><option>Repositório de conhecimento</option></select></div>
+      <div class="fld"><label>Conexão MCP <small>· de onde vem a capacidade</small></label><select class="in"><option>GitHub Enterprise</option><option>board</option><option>Atlan</option><option>ServiceNow</option><option>Catálogo de Sistemas</option><option>Repositório de conhecimento</option></select></div>
       <div class="fld"><label>Nível de permissão</label>
         <div class="check-list">
           <label class="check-item"><input type="radio" name="toolperm" checked style="accent-color:var(--accent)"> <span class="perm leitura">LEITURA</span> &nbsp;consulta dados, sem efeito colateral</label>
@@ -3064,7 +3064,7 @@ const cannedReplies={
   brief:"Boa! Registrei esse ponto no brief. Quer que eu atualize a seção de premissas e recalcule o impacto estimado com base nos dados do Atlan?",
   prd:"Perfeito, incluí como requisito RF-13 e marquei para revisão da Ana. Isso afeta o critério de aceite da história de split — quer que eu já sinalize o Agente SM?",
   arq:"Entendido. Esse padrão está coberto pelo Blueprint v3 — vou registrar um ADR no ms-split-engine e validar com as regras de arquitetura definidas pela Plataforma.",
-  hist:"Fechado! Quebrei em 2 histórias menores e sincronizei no IU Click. As estimativas foram revisadas: 5 e 3 pontos. O board da squad já está atualizado.",
+  hist:"Fechado! Quebrei em 2 histórias menores e sincronizei no board. As estimativas foram revisadas: 5 e 3 pontos. O board da squad já está atualizado.",
   dev:"Ok! Vou aplicar o ajuste nos 2 repositórios afetados, rodar a suíte de testes local e atualizar os PRs. Te aviso quando os checks do CI ficarem verdes.",
   devst:"Boa! Apliquei o ajuste no LedgerEntryService e atualizei o teste de idempotência. Rodei a suíte local: 36/36 verdes ✅. Atualizei o PR #87 e o diff aqui do lado. Quer que eu solicite o review do Carlos ou itera mais alguma coisa antes?",
   gmud:"Certo. A GMUD CHG0048231 segue aguardando aprovação no ServiceNow — janela de sexta 22h. Se aprovada até quinta, o deploy é automático e te trago o resultado da esteira aqui."

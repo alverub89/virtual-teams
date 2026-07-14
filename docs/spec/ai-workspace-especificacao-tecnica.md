@@ -19,7 +19,7 @@ Esta especificação descreve **como construir** isso com uma stack deliberadame
 | Hospedagem web + API | **Netlify** (site estático + Functions) | Sem contêineres, sem Kubernetes, sem servidor persistente |
 | Banco de dados | **Neon** (Postgres serverless) | Pode ser Neon direto ou via "Netlify DB" (Neon gerenciado pela Netlify) |
 | Inteligência artificial | **Provedor próprio** | Acessado por um adapter; presume-se API compatível com o padrão OpenAI (`/chat/completions`) |
-| Integrações (GitHub, IU Click, Atlan, ServiceNow, Catálogo) | Adapters server-side (Functions) | Modeladas como *tools* com permissão |
+| Integrações (GitHub, board, Atlan, ServiceNow, Catálogo) | Adapters server-side (Functions) | Modeladas como *tools* com permissão |
 
 > **Consequência arquitetural central:** não há processo de longa duração sempre ligado. Toda orquestração (inclusive a execução autônoma dos agentes) precisa ser modelada como **máquina de estados persistida no Neon**, avançada por **Background Functions** e um **Scheduled Function** de varredura. Os checkpoints humanos (human-in-the-loop) são, convenientemente, pausas naturais que não consomem computação enquanto aguardam.
 
@@ -43,7 +43,7 @@ flowchart TB
     subgraph Externo["Serviços externos"]
         AI["Provedor de IA próprio<br/>(OpenAI-compatible)"]
         GH["GitHub Enterprise"]
-        IUC["IU Click"]
+        IUC["board"]
         ATL["Atlan"]
         SNOW["ServiceNow"]
         CAT["Catálogo de Sistemas"]
@@ -71,7 +71,7 @@ flowchart TB
 ## 3. Stack tecnológica
 
 ### 3.1 Frontend
-- **React 18 + TypeScript + Vite** — SPA. O protótipo atual (HTML/CSS único) serve de referência visual 1:1; os tokens de design (laranja Itaú `#EC7000`, cinzas, tipografia system-ui) viram variáveis CSS / config Tailwind.
+- **React 18 + TypeScript + Vite** — SPA. O protótipo atual (HTML/CSS único) serve de referência visual 1:1; os tokens de design (laranja Acme `#EC7000`, cinzas, tipografia system-ui) viram variáveis CSS / config Tailwind.
 - **React Router** para as rotas (espelham as telas do protótipo).
 - **TanStack Query** (React Query) para data fetching, cache e revalidação.
 - **Tailwind CSS** (com o design system extraído do protótipo) ou CSS Modules — recomendação: Tailwind com `theme.extend` carregando os tokens.
@@ -84,7 +84,7 @@ flowchart TB
 - **Drizzle ORM** para acesso ao Neon (tipagem end-to-end a partir do schema).
 - Funções especializadas:
   - **Background Functions** (`*-background.ts`): orquestração de agentes e execução autônoma (até 15 min por invocação).
-  - **Scheduled Functions** (cron): *sweeper* de runs travados, sincronizações periódicas (IU Click, GitHub, catálogo), fechamento de janela de custos.
+  - **Scheduled Functions** (cron): *sweeper* de runs travados, sincronizações periódicas (board, GitHub, catálogo), fechamento de janela de custos.
   - **Edge Function** opcional para o *handshake* de sessão e para *streaming* de chat próximo do usuário.
 
 ### 3.3 Banco de dados
@@ -223,7 +223,7 @@ Referências: [Background Functions](https://docs.netlify.com/build/functions/ba
 ## 6. Autenticação e autorização
 
 ### 6.1 Login via GitHub (OAuth)
-1. SPA redireciona para o GitHub OAuth (org `itau-meios-pagamento`, escopos mínimos: `read:user`, `read:org`, e os necessários às tools de repositório).
+1. SPA redireciona para o GitHub OAuth (org `acme-meios-pagamento`, escopos mínimos: `read:user`, `read:org`, e os necessários às tools de repositório).
 2. Callback numa Function troca `code` por access token, resolve o usuário, faz *upsert* em `pessoa` (por e-mail/login) e cria uma **sessão**.
 3. **Sessão** = cookie `httpOnly`, `Secure`, `SameSite=Lax`, contendo um **JWT assinado** (curto, ~15 min) + *refresh* opaco persistido no Neon (`sessao`). Alternativa gerenciada: **Auth.js** ou **Lucia**.
 4. **SSO corporativo (Azure AD)** como provedor alternativo pelo mesmo mecanismo (OIDC).
@@ -291,7 +291,7 @@ em_andamento ──(passo automático)──► em_andamento
 ### 8.2 Motor de avanço (`advanceRun`)
 Um **Background Function** (`run-advance-background.ts`) recebe um `runId` e executa em laço:
 1. Carrega o run e o próximo passo `pendente`.
-2. Se o passo é **automático**, executa a lógica do passo (chamar agente, mapear repos consultando `capacidade_repositorio`/catálogo, gerar documento, criar backlog no IU Click…), grava `saida`/`status = concluido`, e segue para o próximo — **enquanto houver orçamento de tempo** (< ~13 min; margem sob o teto de 15).
+2. Se o passo é **automático**, executa a lógica do passo (chamar agente, mapear repos consultando `capacidade_repositorio`/catálogo, gerar documento, criar backlog no board…), grava `saida`/`status = concluido`, e segue para o próximo — **enquanto houver orçamento de tempo** (< ~13 min; margem sob o teto de 15).
 3. Se o passo é **checkpoint humano**, cria/ativa `execucao_checkpoint`, seta o run em `aguardando_aprovacao` e **encerra** (a espera não custa computação).
 4. Se estourar o tempo antes de terminar, apenas retorna; o **Scheduled Function sweeper** reenfileira o run para continuar (idempotência garante que passos já concluídos não repetem).
 
@@ -325,7 +325,7 @@ export interface ToolExecutor {
 | Ler repositório | GitHub Enterprise | GitHub App (Octokit) | leitura |
 | Abrir Pull Request | GitHub Enterprise | Octokit (cria branch/PR, **nunca merge**) | escrita |
 | Consultar metadados | Atlan | API REST Atlan | leitura |
-| Sincronizar histórias | IU Click | API IU Click (webhook bidirecional) | escrita |
+| Sincronizar histórias | board | API board (webhook bidirecional) | escrita |
 | Buscar sistema (sigla) | Catálogo de Sistemas (CMDB) | API do catálogo | leitura |
 | Abrir GMUD | ServiceNow | Table/Import API | **crítica** (exige checkpoint) |
 | Publicar documentação | Repositório de conhecimento (Neon/Git) | interno | escrita |
@@ -333,7 +333,7 @@ export interface ToolExecutor {
 - **Enforcement de permissão:** o executor só roda se a tool estiver liberada para o agente (`agente_tool`) e o `permissao` permitir; ações `critica` exigem checkpoint humano aberto e aprovado.
 - **MCP:** se os sistemas expuserem servidores MCP, os adapters podem ser clientes MCP; caso contrário, adapters HTTP tipados. A interface `ToolExecutor` abstrai os dois.
 - **Credenciais** por integração em env vars/secret store da Netlify, com contas de serviço (não a sessão do usuário).
-- **Webhooks de entrada** (GitHub push/CI, ServiceNow status, IU Click) chegam por Functions dedicadas que atualizam `execucao_esteira`, `pull_request`, `gmud`, `historia`.
+- **Webhooks de entrada** (GitHub push/CI, ServiceNow status, board) chegam por Functions dedicadas que atualizam `execucao_esteira`, `pull_request`, `gmud`, `historia`.
 
 ---
 
@@ -420,7 +420,7 @@ ai-workspace/
 │  ├─ provider.ts            # LLMProvider + OwnProvider
 │  ├─ router.ts              # roteamento de modelos
 │  └─ prompts.ts             # composição do prompt de sistema
-├─ integrations/             # adapters (github, iuclick, atlan, snow, catalogo)
+├─ integrations/             # adapters (github, board, atlan, snow, catalogo)
 ├─ shared/                   # tipos + zod schemas (web + functions)
 ├─ netlify.toml
 └─ drizzle.config.ts
@@ -441,7 +441,7 @@ ai-workspace/
 | `GITHUB_APP_ID` / `_PRIVATE_KEY` / `_INSTALLATION_ID` | GitHub App (tools de repo) |
 | `AZURE_OIDC_*` | SSO corporativo (opcional) |
 | `SESSION_JWT_SECRET` | Assinatura de sessão |
-| `IUCLICK_API_URL` / `_TOKEN` | Integração IU Click |
+| `BOARD_API_URL` / `_TOKEN` | Integração board |
 | `ATLAN_API_URL` / `_TOKEN` | Integração Atlan |
 | `SERVICENOW_URL` / `_USER` / `_PWD` | Integração ServiceNow (GMUD) |
 | `CATALOGO_API_URL` / `_TOKEN` | Catálogo de sistemas (siglas) |
@@ -457,7 +457,7 @@ Todas provisionadas via `netlify env:set`, por contexto.
 Repo, `netlify.toml`, Neon + branches de preview, migration inicial (schema já pronto), SPA shell com o design system do protótipo, login GitHub + sessão + `/api/me`, RBAC básico.
 
 **Fase 1 — Núcleo da squad (3–4 semanas)**
-Iniciativas + jornada (leitura/escrita), capacidades e conexão de repos do GitHub, histórias com sync IU Click, documentação e leitor, OKRs (planejado×realizado + associação de features). Chat de agente por etapa com **streaming** e o adapter de IA + roteador de modelos.
+Iniciativas + jornada (leitura/escrita), capacidades e conexão de repos do GitHub, histórias com sync board, documentação e leitor, OKRs (planejado×realizado + associação de features). Chat de agente por etapa com **streaming** e o adapter de IA + roteador de modelos.
 
 **Fase 2 — Console e governança (2–3 semanas)**
 Blueprints, esteira/GMUD (config + webhooks), métodos, **Agentes/Skills/Tools** (editor + composição de prompt), MCPs & modelos, consumo de tokens.

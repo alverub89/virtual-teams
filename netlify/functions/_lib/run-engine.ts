@@ -14,7 +14,7 @@ const PASSOS_PADRAO = [
   { ordem: 2, nome: "Mapear capacidades e repositórios", agenteNome: "Agente Arquiteto", tipo: "automatica" },
   { ordem: 3, nome: "Gerar PRD preliminar", agenteNome: "Agente PM", tipo: "automatica" },
   { ordem: 4, nome: "Checkpoint: aprovar PRD e escopo", agenteNome: null, tipo: "checkpoint" },
-  { ordem: 5, nome: "Criar histórias no IU Click", agenteNome: "Agente SM", tipo: "automatica" },
+  { ordem: 5, nome: "Criar histórias no board", agenteNome: "Agente SM", tipo: "automatica" },
   { ordem: 6, nome: "Preparar branch e esqueleto no repositório", agenteNome: "Agente Dev", tipo: "automatica" },
   { ordem: 7, nome: "Checkpoint: revisar entregáveis do run", agenteNome: null, tipo: "checkpoint" },
 ] as const;

@@ -49,7 +49,7 @@ Ordem interna por valor:
 | C4 | **Capacidades + repositórios** (`POST /api/repos/conectar`) — importar repo do GitHub e associar | usa a GitHub App (A4) |
 | C5 | **OKRs** — cascata, medições planejado × realizado (`POST /api/krs/:id/medicoes`), associação de features | componente `KrBar` do protótipo |
 | C6 | **Documentação + leitor** (`GET/POST /api/docs`) | `DocReader` do protótipo |
-| C7 | **Histórias + sync IU Click** (webhook bidirecional) | pode ficar por último — depende de credencial IU Click |
+| C7 | **Histórias + sync board** (webhook bidirecional) | pode ficar por último — depende de credencial board |
 | C8 | **Estação dev + Esteira & GMUDs** (leitura) — webhooks GitHub push/CI atualizando `execucao_esteira`/`pull_request` | |
 
 **Critério de usável:** uma PM cria uma iniciativa, conversa com o agente da
@@ -102,5 +102,5 @@ A (infra) ──► B (login/demo) ──► C (núcleo squad) ══ MVP usáve
 ## Bloqueios que dependem de terceiros (levantar já)
 
 1. **`ai_workspace_schema.sql`** — o schema canônico de 44 tabelas citado na spec não está no repositório. Sem ele, seguimos com o schema incremental do Drizzle (funciona, mas diverge do "validado").
-2. **Credenciais**: org GitHub (OAuth + App), provedor de IA, IU Click, Atlan, ServiceNow, Catálogo — cada uma destrava sua integração; nenhuma bloqueia o MVP além do provedor de IA (para o chat C3).
+2. **Credenciais**: org GitHub (OAuth + App), provedor de IA, board, Atlan, ServiceNow, Catálogo — cada uma destrava sua integração; nenhuma bloqueia o MVP além do provedor de IA (para o chat C3).
 3. **Conta Netlify + Neon** — sem elas o teste é só local.

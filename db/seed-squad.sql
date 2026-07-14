@@ -54,7 +54,7 @@ BEGIN
     RETURNING id INTO v_cap;
 
     INSERT INTO ai_workspace.repositorio(squad_id, nome)
-    VALUES (v_squad, 'itau/pix-cobranca') RETURNING id INTO v_repo;
+    VALUES (v_squad, 'acme/pix-cobranca') RETURNING id INTO v_repo;
 
     -- Iniciativa 1 (em andamento, etapa 3)
     INSERT INTO ai_workspace.iniciativa(codigo, squad_id, capacidade_id, titulo, descricao, status, etapa_atual, criado_por)
@@ -120,9 +120,9 @@ BEGIN
 
     -- Esteira + GMUD + Pull Request
     INSERT INTO ai_workspace.execucao_esteira(squad_id, iniciativa_id, repositorio, etapa, status, detalhe) VALUES
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'build',     'ok',          'build #128 verde'),
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'testes',    'ok',          'cobertura 87%'),
-      (v_squad, v_ini1, 'itau/pix-cobranca', 'seguranca', 'em_execucao', 'SAST em andamento');
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'build',     'ok',          'build #128 verde'),
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'testes',    'ok',          'cobertura 87%'),
+      (v_squad, v_ini1, 'acme/pix-cobranca', 'seguranca', 'em_execucao', 'SAST em andamento');
 
     INSERT INTO ai_workspace.gmud(squad_id, iniciativa_id, numero, titulo, status, risco, janela)
     VALUES (v_squad, v_ini1, 'CHG-2026-0912', 'Deploy PIX Automatico - fase 1', 'aguardando_aprovacao', 'medio', '2026-07-20 02:00 as 04:00');

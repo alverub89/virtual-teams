@@ -1,7 +1,7 @@
 // Dados do Playground — um MCP real, pronto para demonstração, com tools que
 // batem em APIs públicas (sem chave) e retornam dados de verdade. Foco em dados
 // financeiros/cadastrais brasileiros (BrasilAPI) + câmbio (Frankfurter/ECB),
-// que é o terreno do Itaú Meios de Pagamento.
+// que é o terreno de Meios de Pagamento.
 //
 // Os schemas já vêm prontos (não dependem do gateway de IA), então o playground
 // funciona de forma determinística numa demo.
@@ -49,7 +49,7 @@ export const PLAYGROUND_TOOLS: SeedTool[] = [
   },
   {
     nome: "consultar_banco",
-    descricao: "Detalha um banco pelo código de compensação (ex.: 341 = Itaú Unibanco).",
+    descricao: "Detalha um banco pelo código de compensação (3 dígitos).",
     permissao: "leitura",
     execucao: "http",
     parametros: "codigo (código de compensação do banco, ex.: 341)",
@@ -143,7 +143,7 @@ export const PLAYGROUND_TOOLS: SeedTool[] = [
     inputSchema: obj({ conceito: str("conceito a explicar, ex.: como funciona o PIX"), publico: str("perfil do cliente, ex.: MEI") }, ["conceito"]),
     handlerConfig: {
       prompt:
-        "Você é um educador financeiro do Itaú. Explique o conceito pedido de forma simples, correta e acolhedora " +
+        "Você é um educador financeiro. Explique o conceito pedido de forma simples, correta e acolhedora " +
         "para o público informado. No máximo 6 linhas, sem jargão desnecessário.",
     },
     exemplo: { conceito: "como funciona o PIX", publico: "MEI" },

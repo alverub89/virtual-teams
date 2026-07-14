@@ -41,14 +41,14 @@ export default function PopularDemo() {
           <Button variant="primary" onClick={() => popular.mutate()}>
             {popular.isPending ? "Populando…" : "🚀 Popular e entrar como Tech Lead"}
           </Button>
-          <Button onClick={() => confirm("Apagar a squad de demo e o time (@itau-demo.com) e voltar a ser CTO?") && rollback.mutate()}>
+          <Button onClick={() => confirm("Apagar a squad de demo e o time (@acme-demo.com) e voltar a ser CTO?") && rollback.mutate()}>
             {rollback.isPending ? "Apagando…" : "🧹 Rollback (apagar demo)"}
           </Button>
         </div>
         {msg && <div className="prompt-box" style={{ marginTop: 14 }}>{msg}</div>}
         <p className="sub" style={{ marginTop: 16, fontSize: 12 }}>
           Login dos demais papéis para demonstrar cada visão — senha <code>Demo@2026</code>:<br />
-          ana.souza · bruno.lima · carla.nunes · diego.alves · eduardo.ramos <b>@itau-demo.com</b>
+          ana.souza · bruno.lima · carla.nunes · diego.alves · eduardo.ramos <b>@acme-demo.com</b>
         </p>
       </Card>
     </div>

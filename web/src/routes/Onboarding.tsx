@@ -165,7 +165,7 @@ export default function Onboarding() {
               <p className="onb-help">O passo a passo que <b>toda squad</b> vai seguir: fases, agente responsável e o que cada fase gera. As squads herdam este default (e podem criar o próprio depois).</p>
               <div className="fld">
                 <label>Nome do método</label>
-                <input className="in" value={metodoNome} onChange={(e) => setMetodoNome(e.target.value)} placeholder="Ex.: Método Itaú de Produto" autoFocus />
+                <input className="in" value={metodoNome} onChange={(e) => setMetodoNome(e.target.value)} placeholder="Ex.: Método Acme de Produto" autoFocus />
               </div>
               <div style={{ maxHeight: 280, overflowY: "auto", marginTop: 4 }}>
                 {fases.map((f, i) => (

@@ -36,17 +36,17 @@ export async function seedDemoSquad(db: any, pessoaId: string) {
     const [p] = await db.insert(s.pessoa).values({ nome, email, senhaHash: hash, papel, comunidadeId: comId, squadId, onboardingConcluido: true }).returning();
     return p;
   };
-  const pm = await upsertPessoa("Ana Souza", "ana.souza@itau-demo.com", "pm", sqId);
-  const dev1 = await upsertPessoa("Bruno Lima", "bruno.lima@itau-demo.com", "dev", sqId);
-  const dev2 = await upsertPessoa("Carla Nunes", "carla.nunes@itau-demo.com", "dev", sqId);
-  const dev3 = await upsertPessoa("Diego Alves", "diego.alves@itau-demo.com", "dev", sqId);
-  await upsertPessoa("Eduardo Ramos", "eduardo.ramos@itau-demo.com", "gestao", null);
+  const pm = await upsertPessoa("Ana Souza", "ana.souza@acme-demo.com", "pm", sqId);
+  const dev1 = await upsertPessoa("Bruno Lima", "bruno.lima@acme-demo.com", "dev", sqId);
+  const dev2 = await upsertPessoa("Carla Nunes", "carla.nunes@acme-demo.com", "dev", sqId);
+  const dev3 = await upsertPessoa("Diego Alves", "diego.alves@acme-demo.com", "dev", sqId);
+  await upsertPessoa("Eduardo Ramos", "eduardo.ramos@acme-demo.com", "gestao", null);
 
   // Capacidade + repositório
   let cap = (await db.select().from(s.capacidade)).find((c: any) => c.squadId === sqId);
   if (!cap) [cap] = await db.insert(s.capacidade).values({ squadId: sqId, nome: "PIX Cobranca", descricao: "Cobrancas e recorrencias via PIX", sigla: "PIXCOB" }).returning();
   let repo = (await db.select().from(s.repositorio)).find((r: any) => r.squadId === sqId);
-  if (!repo) [repo] = await db.insert(s.repositorio).values({ squadId: sqId, nome: "itau/pix-cobranca" }).returning();
+  if (!repo) [repo] = await db.insert(s.repositorio).values({ squadId: sqId, nome: "acme/pix-cobranca" }).returning();
 
   // Iniciativas + etapas + histórias (distribuídas no time)
   const jaTemIni = (await db.select().from(s.iniciativa)).some((i: any) => i.squadId === sqId);
@@ -78,9 +78,9 @@ export async function seedDemoSquad(db: any, pessoaId: string) {
       { iniciativaId: ini2.id, codigo: "PIXCOB-091", titulo: "Liquidacao por vendedor", pontos: 5, status: "concluida", responsavelId: dev2.id },
     ]);
     await db.insert(s.execucaoEsteira).values([
-      { squadId: sqId, iniciativaId: ini1.id, repositorio: "itau/pix-cobranca", etapa: "build", status: "ok", detalhe: "build #128 verde" },
-      { squadId: sqId, iniciativaId: ini1.id, repositorio: "itau/pix-cobranca", etapa: "testes", status: "ok", detalhe: "cobertura 87%" },
-      { squadId: sqId, iniciativaId: ini1.id, repositorio: "itau/pix-cobranca", etapa: "seguranca", status: "em_execucao", detalhe: "SAST em andamento" },
+      { squadId: sqId, iniciativaId: ini1.id, repositorio: "acme/pix-cobranca", etapa: "build", status: "ok", detalhe: "build #128 verde" },
+      { squadId: sqId, iniciativaId: ini1.id, repositorio: "acme/pix-cobranca", etapa: "testes", status: "ok", detalhe: "cobertura 87%" },
+      { squadId: sqId, iniciativaId: ini1.id, repositorio: "acme/pix-cobranca", etapa: "seguranca", status: "em_execucao", detalhe: "SAST em andamento" },
     ]);
     await db.insert(s.gmud).values({ squadId: sqId, iniciativaId: ini1.id, numero: "CHG-2026-0912", titulo: "Deploy PIX Automatico - fase 1", status: "aguardando_aprovacao", risco: "medio", janela: "2026-07-20 02:00 as 04:00" });
     await db.insert(s.pullRequest).values([
@@ -183,7 +183,7 @@ export async function seedDemoSquad(db: any, pessoaId: string) {
   };
 }
 
-// Remove TUDO que o seed criou (squad de demo + time @itau-demo.com) na
+// Remove TUDO que o seed criou (squad de demo + time @acme-demo.com) na
 // comunidade da pessoa, na ordem correta das FKs. Não apaga a comunidade nem a
 // própria pessoa. Retorna contagens do que foi apagado.
 export async function rollbackDemoSquad(db: any, pessoaId: string) {
@@ -231,10 +231,10 @@ export async function rollbackDemoSquad(db: any, pessoaId: string) {
     await del(s.consumoTokens, s.consumoTokens.squadId, squadIds);
   }
 
-  // Time de demo (@itau-demo.com nesta comunidade + qualquer um ligado às squads),
+  // Time de demo (@acme-demo.com nesta comunidade + qualquer um ligado às squads),
   // exceto a própria pessoa.
   const team = (await db.select().from(s.pessoa)).filter(
-    (p: any) => p.id !== pessoaId && p.comunidadeId === comId && (String(p.email).toLowerCase().endsWith("@itau-demo.com") || squadIds.includes(p.squadId))
+    (p: any) => p.id !== pessoaId && p.comunidadeId === comId && (String(p.email).toLowerCase().endsWith("@acme-demo.com") || squadIds.includes(p.squadId))
   );
   const teamIds = team.map((p: any) => p.id);
   await del(s.sessao, s.sessao.pessoaId, teamIds);

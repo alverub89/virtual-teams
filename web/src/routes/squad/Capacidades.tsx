@@ -257,7 +257,7 @@ export default function Capacidades() {
       {repoModal && (
         <Modal title="Conectar repositórios" subtitle="org/repo por linha. Reflete na sua squad (Comunidade & Pessoas)." onClose={() => setRepoModal(false)}
           foot={<><Button onClick={() => setRepoModal(false)}>Cancelar</Button><Button variant="primary" onClick={() => addRepos.mutate()}>{addRepos.isPending ? "…" : "Conectar"}</Button></>}>
-          <Fld label="Repositórios"><textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"itau/pix-cobranca\nitau/pix-core"} /></Fld>
+          <Fld label="Repositórios"><textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"acme/pix-cobranca\nacme/pix-core"} /></Fld>
         </Modal>
       )}
       {teste && (

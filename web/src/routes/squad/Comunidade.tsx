@@ -184,7 +184,7 @@ export default function Comunidade() {
         <Modal title="Conectar repositórios" subtitle="Um por linha, no formato org/repo. Pode colar vários." onClose={() => setRepoModal(false)}
           foot={<><Button onClick={() => setRepoModal(false)}>Cancelar</Button><Button variant="primary" onClick={() => addRepos.mutate()}>{addRepos.isPending ? "Conectando…" : "Conectar"}</Button></>}>
           <Fld label="Repositórios (org/repo por linha)">
-            <textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"itau/pix-cobranca\nitau/pix-core\nitau/consent-service"} />
+            <textarea className="in" rows={5} value={reposText} onChange={(e) => setReposText(e.target.value)} placeholder={"acme/pix-cobranca\nacme/pix-core\nacme/consent-service"} />
           </Fld>
         </Modal>
       )}

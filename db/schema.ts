@@ -359,7 +359,7 @@ export const iniciativaEtapa = aiWorkspace.table(
 export const historia = aiWorkspace.table("historia", {
   id: uuid("id").primaryKey().defaultRandom(),
   iniciativaId: uuid("iniciativa_id").notNull().references(() => iniciativa.id),
-  codigo: text("codigo").notNull(), // ex.: PAG-2311 (IU Click)
+  codigo: text("codigo").notNull(), // ex.: PAG-2311 (board)
   titulo: text("titulo").notNull(),
   descricao: text("descricao"),
   pontos: integer("pontos"),

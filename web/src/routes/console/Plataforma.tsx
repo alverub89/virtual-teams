@@ -155,7 +155,7 @@ export function Metodos() {
           foot={<><Button onClick={() => setEdit(null)}>Cancelar</Button><Button variant="primary" onClick={() => nome.length >= 2 && fases.some((f) => f.nome.trim()) && salvar.mutate()}>{salvar.isPending ? "Salvando…" : "Salvar método"}</Button></>}
         >
           <div className="fld-row">
-            <Fld label="Nome do método"><input className="in" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Método Itaú de Produto" /></Fld>
+            <Fld label="Nome do método"><input className="in" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Método Acme de Produto" /></Fld>
             <Fld label="Escopo">
               <select className="in" value={escopo} onChange={(e) => setEscopo(e.target.value)}>
                 <option value="publico">Público (todas as comunidades)</option>
@@ -248,7 +248,7 @@ export function EsteiraConfig() {
               <span className="icon-sq">🐙</span>
               <div><h3>Repositório (GitHub)</h3><p className="sub">nome exibido ao disparar a esteira</p></div>
             </div>
-            <Fld label="Organização"><input className="in" value={orgV} onChange={(e) => setOrg(e.target.value)} placeholder="ex.: itau-meios" /></Fld>
+            <Fld label="Organização"><input className="in" value={orgV} onChange={(e) => setOrg(e.target.value)} placeholder="ex.: acme-meios" /></Fld>
             <Fld label="Repositório padrão"><input className="in" value={repoV} onChange={(e) => setRepo(e.target.value)} placeholder="ex.: split-service" /></Fld>
             <Fld label="Workflow (arquivo)"><input className="in" value={wfV} onChange={(e) => setWf(e.target.value)} placeholder="deploy.yml" /></Fld>
           </div>
@@ -257,7 +257,7 @@ export function EsteiraConfig() {
               <span className="icon-sq">🧾</span>
               <div><h3>ServiceNow (GMUD)</h3><p className="sub">instância exibida na GMUD</p></div>
             </div>
-            <Fld label="Instância ServiceNow"><input className="in" value={snV} onChange={(e) => setSn(e.target.value)} placeholder="ex.: itau (→ itau.service-now.com)" /></Fld>
+            <Fld label="Instância ServiceNow"><input className="in" value={snV} onChange={(e) => setSn(e.target.value)} placeholder="ex.: acme (→ acme.service-now.com)" /></Fld>
           </div>
         </div>
         <div style={{ marginTop: 12 }}>

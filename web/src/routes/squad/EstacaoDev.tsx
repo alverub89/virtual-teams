@@ -22,7 +22,7 @@ export default function EstacaoDev() {
       <div className="grid g2" style={{ alignItems: "start" }}>
         <div className="card card-pad">
           <h3>Histórias da squad</h3>
-          <p className="sub" style={{ marginBottom: 10 }}>sincronizadas com o IU Click</p>
+          <p className="sub" style={{ marginBottom: 10 }}>sincronizadas com o board</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {data?.historias.map((h) => (
               <div className="story" key={h.id} style={h.minha ? { borderColor: "var(--accent-soft-2)" } : undefined}>

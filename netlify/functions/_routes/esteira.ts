@@ -128,7 +128,7 @@ app.post("/disparar", rbac("iniciar_run"), async (c) => {
   const cfg = await configDaSquad(db, me.squadId);
   const org = cfg?.githubOrg?.trim();
   const repoPadrao = cfg?.githubRepoPadrao?.trim();
-  const repo = body.data.repositorio?.trim() || (org && repoPadrao ? `${org}/${repoPadrao}` : repoPadrao) || "itau/demo-service";
+  const repo = body.data.repositorio?.trim() || (org && repoPadrao ? `${org}/${repoPadrao}` : repoPadrao) || "acme/demo-service";
 
   // Remove uma simulação anterior (mantém as execuções fixas do seed) e cria
   // os 6 gates com o mesmo instante de início; o status é calculado no read.
