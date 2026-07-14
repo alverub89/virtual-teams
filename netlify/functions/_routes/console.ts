@@ -38,7 +38,7 @@ app.get("/setup", async (c) => {
   const convites = (await db.select().from(s.convite)).filter((v: any) => v.comunidadeId === com.id);
   const metodos = (await db.select().from(s.metodo)).filter((m: any) => m.ativo);
   const docsBase = (await db.select().from(s.documento)).filter((d: any) => d.escopo === "comunidade");
-  const agentes = await db.select().from(s.agente);
+  const agentes = (await db.select().from(s.agente)).filter((a: any) => a.comunidadeId == null || a.comunidadeId === com.id);
 
   return c.json({
     comunidade: com,
@@ -155,8 +155,10 @@ app.put("/integracoes", rbac("configurar_plataforma"), async (c) => {
 /* ---------- agentes, skills & tools ---------- */
 
 app.get("/agentes", async (c) => {
+  const me = c.get("me");
   const db = await getDb();
-  const agentes = await db.select().from(s.agente).orderBy(asc(s.agente.nome));
+  const agentes = (await db.select().from(s.agente).orderBy(asc(s.agente.nome)))
+    .filter((a: any) => a.comunidadeId == null || a.comunidadeId === me.comunidadeId); // isolamento de tenant
   const skills = await db.select().from(s.skill);
   const tools = await db.select().from(s.tool);
   const agSkills = await db.select().from(s.agenteSkill);
@@ -519,6 +521,7 @@ app.post("/agentes", cfg, async (c) => {
       emoji: b.emoji ?? "🤖",
       personalidade: b.personalidade,
       nivelModelo: b.nivelModelo ?? "intermediario",
+      comunidadeId: me.comunidadeId ?? null,
     })
     .returning();
   await audit(me, "criar_agente", `agente:${b.nome}`);
@@ -1128,13 +1131,15 @@ app.post("/aprovacoes/mcp/:id", cfg, decidir(s.conexaoMcp, "mcp"));
 /* ---------- acervo (estilo BMAD): agentes, skills, templates, checklists ---------- */
 
 app.get("/acervo", async (c) => {
+  const me = c.get("me");
   const db = await getDb();
-  const [agentes, skills, templates, checklists] = await Promise.all([
+  const [agentesAll, skills, templates, checklists] = await Promise.all([
     db.select().from(s.agente),
     db.select().from(s.skill),
     db.select().from(s.template),
     db.select().from(s.checklist),
   ]);
+  const agentes = agentesAll.filter((a: any) => a.comunidadeId == null || a.comunidadeId === me.comunidadeId); // isolamento de tenant
   const jaTemBmad = agentes.some((a: any) => a.origem === "bmad") || templates.some((t: any) => t.origem === "bmad");
   return c.json({
     jaTemBmad,
@@ -1182,7 +1187,7 @@ app.post("/acervo/gerar", cfg, async (c) => {
   // inativo, então nenhum fluxo o consome antes da revisão.
   let criado: any;
   if (tipo === "agente") {
-    [criado] = await db.insert(s.agente).values({ nome: obj.nome, papel: obj.papel ?? "Agente", emoji: obj.emoji ?? "🤖", personalidade: obj.personalidade ?? descricao, nivelModelo: ["avancado", "intermediario", "leve"].includes(obj.nivelModelo) ? obj.nivelModelo : "intermediario", guardRails: Array.isArray(obj.guardRails) ? obj.guardRails.map(String) : [], origem: "ia", ativo: false, revisaoPendente: true }).returning();
+    [criado] = await db.insert(s.agente).values({ nome: obj.nome, papel: obj.papel ?? "Agente", emoji: obj.emoji ?? "🤖", personalidade: obj.personalidade ?? descricao, nivelModelo: ["avancado", "intermediario", "leve"].includes(obj.nivelModelo) ? obj.nivelModelo : "intermediario", guardRails: Array.isArray(obj.guardRails) ? obj.guardRails.map(String) : [], origem: "ia", ativo: false, revisaoPendente: true, comunidadeId: me.comunidadeId ?? null }).returning();
   } else if (tipo === "skill") {
     [criado] = await db.insert(s.skill).values({ nome: obj.nome, emoji: obj.emoji ?? "🧩", descricao: obj.descricao ?? null, instrucoes: obj.instrucoes ?? descricao, origem: "ia", revisaoPendente: true }).returning();
   } else if (tipo === "template") {

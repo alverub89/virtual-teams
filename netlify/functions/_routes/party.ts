@@ -11,7 +11,9 @@ const app = new Hono();
 app.get("/", async (c) => {
   const me = c.get("me");
   const db = await getDb();
-  const agentes = (await db.select().from(s.agente)).filter((a: any) => a.ativo)
+  // Isolamento de tenant: só agentes globais (built-in) + os da minha comunidade.
+  const agentes = (await db.select().from(s.agente))
+    .filter((a: any) => a.ativo && (a.comunidadeId == null || a.comunidadeId === me.comunidadeId))
     .map((a: any) => ({ id: a.id, nome: a.nome, papel: a.papel, emoji: a.emoji }));
   const sessoes = (await db.select().from(s.partySessao).orderBy(desc(s.partySessao.criadoEm)))
     .filter((x: any) => !x.squadId || x.squadId === me.squadId)

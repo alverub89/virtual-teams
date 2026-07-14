@@ -179,6 +179,16 @@ export default function Autonoma() {
                   ? `Orquestração da iniciativa ${run.iniciativaCodigo ?? ""} — o agente conduz o fluxo inteiro`
                   : `${run.krDescricao ? `KR alvo: ${run.krDescricao} · ` : ""}consumo ${Math.round(run.tokensGastos / 1000)}k / teto ${Math.round(run.tetoTokens / 1000)}k tokens`}
               </p>
+
+              {run.status === "pausada" && (me?.papel === "pm" || me?.papel === "tech_lead") && (
+                <div className="card" style={{ marginBottom: 12, background: "#fffbeb", border: "1px solid #fde68a" }}>
+                  <p className="sub" style={{ margin: 0 }}>⏸️ Run pausado após você pedir um ajuste. Retome para continuar do ponto em que parou, ou cancele.</p>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <Button variant="primary" onClick={() => retomarRun.mutate(run.id)}>▶ Retomar</Button>
+                    <Button onClick={() => cancelarRun.mutate(run.id)}>🛑 Cancelar</Button>
+                  </div>
+                </div>
+              )}
               {run.modo === "iniciativa" && (() => {
                 const total = run.totalEtapas ?? 0;
                 const feitos = run.passos.filter((p) => p.status === "concluido").length;

@@ -162,6 +162,13 @@
       "when": 1784170000000,
       "tag": "0022_iniciativa_metodo_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784180000000,
+      "tag": "0023_agente_comunidade",
+      "breakpoints": true
     }
   ]
 }

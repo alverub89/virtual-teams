@@ -358,6 +358,25 @@ function docDeHistorias(ini: any, historias: any[]): string {
   return md;
 }
 
+// Remove um wrapper de code fence (```markdown ... ```) que alguns modelos
+// colocam em volta do documento inteiro.
+function desembrulhaMd(txt: string): string {
+  const t = (txt ?? "").trim();
+  const m = t.match(/^```[a-zA-Z]*\n([\s\S]*?)\n```$/);
+  return (m ? m[1] : t).trim();
+}
+// Extrai um resumo limpo: primeira linha significativa, ignorando fences e a
+// palavra do idioma (evita a prévia mostrar literalmente "markdown").
+function resumoDoc(md: string, fallback: string): string {
+  for (const bruto of (md ?? "").split("\n")) {
+    const l = bruto.trim();
+    if (!l || /^```/.test(l) || /^(markdown|md|text|txt|json|html)$/i.test(l)) continue;
+    const limpo = l.replace(/[#*`>_\-]/g, "").trim();
+    if (limpo) return limpo.slice(0, 200);
+  }
+  return fallback;
+}
+
 // Gera (via IA) o documento formal da etapa a partir do contexto + conversa e
 // o persiste em `documento`. Retorna o registro criado. Tolerante a falha da
 // IA: cai para um documento montado a partir da própria conversa.
@@ -402,7 +421,8 @@ async function gerarDocumentoDaEtapa(db: any, ini: any, ordem: number, etapaNome
       `## Contexto\n${ini.descricao ?? "—"}\n\n## Pontos a detalhar\n${cfg.foco}\n\n` +
       (transcript ? `## Notas da conversa\n${transcript}\n` : "");
   }
-  const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 180) ?? titulo;
+  markdown = desembrulhaMd(markdown);
+  const resumo = resumoDoc(markdown, titulo);
 
   const [doc] = await db.insert(s.documento).values({
     squadId: ini.squadId,
@@ -480,7 +500,8 @@ async function gerarDocumentoCritico(db: any, ini: any, ordem: number, etapaNome
 
   if (!markdown) markdown = `# ${titulo}\n\n(documento não pôde ser gerado)`;
   await registrarConsumo(db, { squadId: ini.squadId, iniciativaId: ini.id, etapaOrdem: ordem, promptTokens: pTok, completionTokens: cTok });
-  const resumo = markdown.replace(/[#*`>_-]/g, "").split("\n").map((l: string) => l.trim()).filter(Boolean)[0]?.slice(0, 200) ?? titulo;
+  markdown = desembrulhaMd(markdown);
+  const resumo = resumoDoc(markdown, titulo);
   const [doc] = await db.insert(s.documento).values({
     squadId: ini.squadId, iniciativaId: ini.id, titulo, tipo: cfg.tipo, emoji: cfg.emoji, resumo,
     conteudo: markdown, autorNome: ag?.nome ?? "Agente da etapa", escopo: "squad",
@@ -783,7 +804,7 @@ async function gerarSddDaHistoria(db: any, ini: any, h: any, autorNome: string):
   for (let i = 0; i < 2 && !markdown; i++) {
     try {
       const r = await provider.chat({ model, system: sysDoc, messages: [{ role: "user", content: `${baseUser}\n\nProduza o SDD completo.` }], maxTokens: 2200, temperature: 0.3 });
-      markdown = (r.content ?? "").trim();
+      markdown = desembrulhaMd(r.content ?? "");
     } catch { /* tenta de novo */ }
   }
 

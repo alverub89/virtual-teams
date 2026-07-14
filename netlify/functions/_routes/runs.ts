@@ -126,23 +126,28 @@ app.post("/:id/cancelar", rbac("iniciar_run"), async (c) => {
   const db = await getDb();
   const [run] = await db.select().from(s.execucaoAutonoma).where(eq(s.execucaoAutonoma.id, c.req.param("id")));
   if (!run || run.squadId !== me.squadId) return c.json({ error: "run não encontrado" }, 404);
-  if (run.status !== "em_andamento") return c.json({ error: "run não está em andamento" }, 409);
+  if (run.status !== "em_andamento" && run.status !== "pausada") return c.json({ error: "run não pode ser cancelado neste estado" }, 409);
   await db.update(s.execucaoAutonoma).set({ status: "cancelada", progresso: "cancelada pelo usuário", atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, run.id));
   await audit(me, "cancelar_run", `run:${run.id}`);
   return c.json({ ok: true });
 });
 
-/* Retomar/tentar novamente a orquestração de uma iniciativa. */
+/* Retomar um run de QUALQUER modo a partir de pausada/cancelada/rejeitada.
+   (Antes: uma rota só p/ iniciativa e outra p/ pausada — a segunda ficava
+   sombreada, então run pausado após "Pedir ajuste" ficava preso sem saída.) */
 app.post("/:id/retomar", rbac("iniciar_run"), async (c) => {
   const me = c.get("me");
   const db = await getDb();
   const [run] = await db.select().from(s.execucaoAutonoma).where(eq(s.execucaoAutonoma.id, c.req.param("id")));
   if (!run || run.squadId !== me.squadId) return c.json({ error: "run não encontrado" }, 404);
-  if (run.modo !== "iniciativa") return c.json({ error: "apenas orquestração de iniciativa" }, 400);
   if (run.status === "em_andamento" || run.status === "concluida") return c.json({ error: `run já ${run.status}` }, 409);
   await db.update(s.execucaoAutonoma).set({ status: "em_andamento", progresso: "retomando…", atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, run.id));
-  const { enqueueOrquestrar } = await import("../_lib/orquestrador");
-  await enqueueOrquestrar(run.id);
+  if (run.modo === "iniciativa") {
+    const { enqueueOrquestrar } = await import("../_lib/orquestrador");
+    await enqueueOrquestrar(run.id);
+  } else {
+    await enqueueAdvance(run.id);
+  }
   await audit(me, "retomar_run", `run:${run.id}`);
   return c.json({ ok: true });
 });
@@ -205,25 +210,6 @@ app.post("/:id/checkpoints/:cid", rbac("decidir_checkpoint"), async (c) => {
   }
   await audit(me, "decidir_checkpoint", `run:${ck.execucaoId}`, { decisao, ajuste: body.data.ajuste });
   return c.json({ ok: true, decisao });
-});
-
-/* Retomar run pausado (após ajuste). */
-app.post("/:id/retomar", rbac("iniciar_run"), async (c) => {
-  const me = c.get("me");
-  const db = await getDb();
-  const [run] = await db
-    .select()
-    .from(s.execucaoAutonoma)
-    .where(eq(s.execucaoAutonoma.id, c.req.param("id")));
-  if (!run) return c.json({ error: "run não encontrado" }, 404);
-  if (run.status !== "pausada") return c.json({ error: "run não está pausado" }, 400);
-  await db
-    .update(s.execucaoAutonoma)
-    .set({ status: "em_andamento", atualizadoEm: new Date() })
-    .where(eq(s.execucaoAutonoma.id, run.id));
-  await audit(me, "retomar_run", `run:${run.id}`);
-  await enqueueAdvance(run.id);
-  return c.json({ ok: true });
 });
 
 export default app;

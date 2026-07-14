@@ -53,12 +53,14 @@ function papelChave(nome: string, papel = ""): string {
 export async function instalarBmad(db: any, comunidadeId?: string | null) {
   const contagem = { agentes: 0, skills: 0, templates: 0, checklists: 0 };
 
-  const agentesExist = await db.select().from(s.agente);
+  // Dedup por comunidade: cada comunidade instala o seu próprio conjunto BMAD
+  // (agentes globais/built-in, comunidadeId null, também contam como já-existe).
+  const agentesExist = (await db.select().from(s.agente)).filter((x: any) => (x.comunidadeId ?? null) === (comunidadeId ?? null) || x.comunidadeId == null);
   const papeisExist = new Set(agentesExist.map((x: any) => papelChave(x.nome, x.papel)));
   for (const a of BMAD_AGENTES) {
     // Não duplica se já existe um agente com o mesmo papel (ex.: seed padrão).
     if (papeisExist.has(papelChave(a.nome, a.papel))) continue;
-    await db.insert(s.agente).values({ ...a, origem: "bmad", ativo: true });
+    await db.insert(s.agente).values({ ...a, origem: "bmad", ativo: true, comunidadeId: comunidadeId ?? null });
     papeisExist.add(papelChave(a.nome, a.papel));
     contagem.agentes++;
   }

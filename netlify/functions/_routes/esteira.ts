@@ -155,10 +155,11 @@ app.post("/gmud", rbac("iniciar_run"), async (c) => {
   if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
   const body = z.object({
     titulo: z.string().min(4).max(200),
+    janela: z.string().max(120).optional(),
     risco: z.enum(["baixo", "medio", "alto"]).optional(),
     iniciativaId: z.string().uuid().optional(),
   }).safeParse(await c.req.json());
-  if (!body.success) return c.json({ error: "título obrigatório" }, 400);
+  if (!body.success) return c.json({ error: "título obrigatório (mín. 4 caracteres)" }, 400);
   const db = await getDb();
 
   const ano = new Date().getUTCFullYear();
@@ -170,6 +171,7 @@ app.post("/gmud", rbac("iniciar_run"), async (c) => {
     titulo: body.data.titulo,
     status: "aguardando_aprovacao",
     risco: body.data.risco ?? "baixo",
+    janela: body.data.janela ?? null,
   });
   await audit(me, "abrir_gmud", `gmud:${numero}`, { simulada: true });
   return c.json({ ok: true, numero, mensagem: `GMUD ${numero} aberta e aguardando aprovação.` }, 202);

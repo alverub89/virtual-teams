@@ -48,11 +48,16 @@ app.post("/repos", async (c) => {
   const body = z.union([RepoIn, z.object({ repos: z.array(RepoIn).min(1).max(30) })]).safeParse(await c.req.json());
   if (!body.success) return c.json({ error: "dados inválidos" }, 400);
   const lista = "repos" in body.data ? body.data.repos : [body.data];
+  const { normalizarRepoNome } = await import("../_lib/capacidades");
+  // Normaliza para org/repo (aceita URL completa) e rejeita entradas inválidas.
+  const norm = lista.map((r) => ({ ...r, nome: normalizarRepoNome(r.nome) }));
+  const invalidos = norm.filter((r) => !r.nome).length;
+  if (invalidos && norm.every((r) => !r.nome)) return c.json({ error: "informe o repositório no formato org/repo (ou a URL do GitHub)" }, 400);
   const db = await getDb();
   const existentes = new Set((await db.select().from(s.repositorio).where(eq(s.repositorio.squadId, me.squadId))).map((r: any) => r.nome));
-  const novos = lista.filter((r) => !existentes.has(r.nome));
+  const novos = norm.filter((r) => r.nome && !existentes.has(r.nome));
   const criados = novos.length
-    ? await db.insert(s.repositorio).values(novos.map((r) => ({ squadId: me.squadId, nome: r.nome, linguagem: r.linguagem ?? null, url: `https://github.com/${r.nome}` }))).returning()
+    ? await db.insert(s.repositorio).values(novos.map((r) => ({ squadId: me.squadId, nome: r.nome!, linguagem: r.linguagem ?? null, url: `https://github.com/${r.nome}` }))).returning()
     : [];
   await audit(me, "conectar_repos", `squad:${me.squadId}`, { qtd: criados.length });
   return c.json({ ok: true, criados: criados.length }, 201);

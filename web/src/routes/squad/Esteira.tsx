@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, post, useMe } from "../../lib/api";
-import { Button, Chip, PageHead } from "../../components/ui";
+import { Button, Chip, Fld, Modal, PageHead } from "../../components/ui";
 import { useToast } from "../../lib/toast";
 
 interface EsteiraData {
@@ -40,18 +41,19 @@ export default function Esteira() {
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
+  const [gmudAberto, setGmudAberto] = useState(false);
+  const [gTitulo, setGTitulo] = useState("");
+  const [gJanela, setGJanela] = useState("");
+  const [gRisco, setGRisco] = useState("baixo");
   const abrirGmud = useMutation({
-    mutationFn: (titulo: string) => post<{ ok: boolean; mensagem: string; numero: string }>("/esteira/gmud", { titulo }),
+    mutationFn: () => post<{ ok: boolean; mensagem: string; numero: string }>("/esteira/gmud", { titulo: gTitulo.trim(), janela: gJanela.trim() || undefined, risco: gRisco }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["esteira"] });
+      setGmudAberto(false); setGTitulo(""); setGJanela(""); setGRisco("baixo");
       toast(`🧾 ${r.mensagem}`);
     },
     onError: (e) => toast(`⚠️ ${(e as Error).message}`),
   });
-  const novaGmud = () => {
-    const t = prompt("Título da mudança (GMUD):");
-    if (t && t.trim().length >= 4) abrirGmud.mutate(t.trim());
-  };
 
   return (
     <>
@@ -61,7 +63,7 @@ export default function Esteira() {
         actions={podeAgir && (
           <div style={{ display: "flex", gap: 8 }}>
             <Button onClick={() => disparar.mutate()}>{disparar.isPending ? "Disparando…" : "🚀 Disparar esteira"}</Button>
-            <Button variant="primary" onClick={novaGmud}>🧾 Abrir GMUD</Button>
+            <Button variant="primary" onClick={() => setGmudAberto(true)}>🧾 Abrir GMUD</Button>
           </div>
         )}
       />
@@ -117,6 +119,37 @@ export default function Esteira() {
           </tbody>
         </table>
       </div>
+
+      {gmudAberto && (
+        <Modal
+          title="Abrir GMUD"
+          subtitle="Ação crítica: cria uma mudança que segue para aprovação. Descreva a mudança antes de abrir."
+          onClose={() => setGmudAberto(false)}
+          foot={
+            <>
+              <Button onClick={() => setGmudAberto(false)}>Cancelar</Button>
+              <Button variant="primary" onClick={() => gTitulo.trim().length >= 4 && abrirGmud.mutate()}>
+                {abrirGmud.isPending ? "Abrindo…" : "🧾 Abrir GMUD"}
+              </Button>
+            </>
+          }
+        >
+          <Fld label="Título da mudança">
+            <input className="in" value={gTitulo} onChange={(e) => setGTitulo(e.target.value)} placeholder="Ex.: Deploy do agendador de recorrências — fase 1" />
+          </Fld>
+          <Fld label="Janela de execução (opcional)">
+            <input className="in" value={gJanela} onChange={(e) => setGJanela(e.target.value)} placeholder="Ex.: 2026-07-20 02:00 às 04:00" />
+          </Fld>
+          <Fld label="Risco">
+            <select className="in" value={gRisco} onChange={(e) => setGRisco(e.target.value)}>
+              <option value="baixo">Baixo</option>
+              <option value="medio">Médio</option>
+              <option value="alto">Alto</option>
+            </select>
+          </Fld>
+          <p className="sub" style={{ fontSize: 12 }}>A GMUD nasce como <b>aguardando aprovação</b> — nada é executado em produção sem o checkpoint humano seguinte.</p>
+        </Modal>
+      )}
     </>
   );
 }

@@ -158,6 +158,7 @@ export const agente = aiWorkspace.table("agente", {
   origem: text("origem").notNull().default("manual"), // manual | bmad | ia
   ativo: boolean("ativo").notNull().default(true),
   revisaoPendente: boolean("revisao_pendente").notNull().default(false), // IA: aguarda revisão humana antes de virar padrão
+  comunidadeId: uuid("comunidade_id"), // null = catálogo global (built-in); senão, isolado por comunidade
 });
 
 export const agenteTemplate = aiWorkspace.table("agente_template", {

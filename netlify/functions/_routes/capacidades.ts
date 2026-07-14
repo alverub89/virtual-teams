@@ -43,15 +43,18 @@ app.post("/repos/conectar", async (c) => {
   if (!me.squadId) return c.json({ error: "usuário sem squad" }, 400);
   const body = ConectarRepo.safeParse(await c.req.json());
   if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+  const { normalizarRepoNome } = await import("../_lib/capacidades");
+  const nome = normalizarRepoNome(body.data.nome);
+  if (!nome) return c.json({ error: "informe o repositório no formato org/repo (ou a URL do GitHub)" }, 400);
 
   const db = await getDb();
   const [repo] = await db
     .insert(s.repositorio)
     .values({
       squadId: me.squadId,
-      nome: body.data.nome,
+      nome,
       linguagem: body.data.linguagem ?? null,
-      url: `https://github.example.com/${body.data.nome}`,
+      url: `https://github.com/${nome}`,
     })
     .returning();
   if (body.data.capacidadeId) {

@@ -7,6 +7,18 @@ export function resolveGithubToken(com: any): string | undefined {
   return com?.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || process.env.GH_TOKEN || undefined;
 }
 
+// Normaliza a entrada de repositório para "org/repo", aceitando também URL
+// completa (https://github.com/org/repo[.git]) ou git@github.com:org/repo.
+// Retorna null se não for um par org/repo válido — evita URLs duplicadas.
+export function normalizarRepoNome(input: string): string | null {
+  let s = (input ?? "").trim().replace(/\s+/g, "");
+  s = s.replace(/^git@github\.com:/i, "").replace(/^https?:\/\/(www\.)?github\.com\//i, "");
+  s = s.replace(/\.git$/i, "").replace(/\/+$/, "");
+  const m = s.match(/([^/]+\/[^/]+)$/);
+  const cand = m ? m[1] : s;
+  return /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(cand) ? cand : null;
+}
+
 // Análise de capacidades: planeja e lê os repositórios da squad (profundidade
 // média: estrutura + README + manifest + arquivos-âncora), depois sintetiza com
 // IA a arquitetura de negócio (fluxo de valor → capacidades L1/L2 → repos).
