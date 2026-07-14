@@ -19,11 +19,18 @@ app.get("/", async (c) => {
   const comDeRt = new Map<string, string>(rts.map((rt: any) => [rt.id, rt.comunidadeId]));
   const comDeSquad = (sid: string | null) => { const rt = sid ? rtDeSquad.get(sid) : undefined; return rt ? comDeRt.get(rt) : undefined; };
   const meuRt = me.squadId ? rtDeSquad.get(me.squadId) : undefined;
+  // Diretoria (CTO/Gestão) enxerga tudo da própria comunidade — inclusive os
+  // docs de escopo squad (features) das squads, que antes ficavam invisíveis
+  // porque a diretoria não tem squadId próprio. Exceção: quando o CTO está
+  // AUDITANDO uma squad, ele vê como aquela squad (não a comunidade toda).
+  const verComunidade = (me.escopos ?? []).includes("comunidade") && !me.auditando;
 
   const visivel = (d: any) => {
     if (d.escopo === "comunidade") return comDeSquad(d.squadId) === me.comunidadeId;
-    if (d.escopo === "release_train") return d.squadId && rtDeSquad.get(d.squadId) === meuRt;
-    return d.squadId === me.squadId; // squad
+    if (d.escopo === "release_train")
+      return verComunidade ? comDeSquad(d.squadId) === me.comunidadeId : (d.squadId && rtDeSquad.get(d.squadId) === meuRt);
+    // escopo squad (features): diretoria vê todas as squads da comunidade.
+    return verComunidade ? comDeSquad(d.squadId) === me.comunidadeId : d.squadId === me.squadId;
   };
 
   const inis = await db.select().from(s.iniciativa);

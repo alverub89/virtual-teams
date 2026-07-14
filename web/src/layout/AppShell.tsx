@@ -20,6 +20,16 @@ export default function AppShell({
   const qc = useQueryClient();
   const { data: me } = useMe();
 
+  // Estado da auditoria (para o CTO): sem squad escolhida, mostramos um convite
+  // claro em vez de páginas vazias (que pareciam "tela em branco").
+  const [auditSq, setAuditSq] = useState(getAuditSquad());
+  useEffect(() => {
+    const h = () => setAuditSq(getAuditSquad());
+    window.addEventListener("aiw-audit-change", h);
+    return () => window.removeEventListener("aiw-audit-change", h);
+  }, []);
+  const precisaEscolherSquad = audit && me?.papel === "cto" && !auditSq;
+
   const sair = async () => {
     await post("/auth/logout");
     qc.clear();
@@ -67,7 +77,19 @@ export default function AppShell({
         </nav>
         <main>
           <div className="content">
-            <Outlet />
+            {precisaEscolherSquad ? (
+              <div className="card" style={{ textAlign: "center", padding: 40, maxWidth: 620, margin: "24px auto" }}>
+                <div style={{ fontSize: 34 }}>🔍</div>
+                <h3 style={{ margin: "10px 0 6px" }}>Escolha uma squad para auditar</h3>
+                <p className="sub" style={{ margin: "0 auto", maxWidth: 460 }}>
+                  Como CTO você entra na visão da squad em <b>modo leitura</b> — percorra a jornada real
+                  (Brief → PRD → Arquitetura → Histórias → Desenvolvimento → GMUD), iniciativas, docs e OKRs,
+                  sem alterar nada. Use o seletor <b>“— escolher squad —”</b> na barra acima.
+                </p>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>
