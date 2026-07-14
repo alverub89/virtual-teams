@@ -57,6 +57,10 @@ export async function orquestrarIniciativa(db: any, execId: string): Promise<voi
       if (r.terminou) break;
     }
 
+    // Reconcilia KRs ligados (direto ou via a iniciativa): o trabalho entregue
+    // move o "realizado" — antes ficava desacoplado da Gestão.
+    const { reconciliarKrsDaExecucao } = await import("./kr");
+    await reconciliarKrsDaExecucao(db, exec);
     await db.update(s.execucaoAutonoma).set({ status: "concluida", progresso: null, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));
   } catch (e) {
     await db.update(s.execucaoAutonoma).set({ status: "rejeitada", progresso: `erro: ${e instanceof Error ? e.message : String(e)}`, atualizadoEm: new Date() }).where(eq(s.execucaoAutonoma.id, execId));

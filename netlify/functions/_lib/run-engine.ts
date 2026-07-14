@@ -75,6 +75,8 @@ export async function advanceRun(runId: string): Promise<void> {
     const proximo = passos.find((p: any) => p.status === "pendente" || p.status === "em_execucao");
 
     if (!proximo) {
+      const { reconciliarKrsDaExecucao } = await import("./kr");
+      await reconciliarKrsDaExecucao(db, run);
       await db
         .update(s.execucaoAutonoma)
         .set({ status: "concluida", atualizadoEm: new Date() })

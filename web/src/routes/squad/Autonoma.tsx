@@ -196,7 +196,7 @@ export default function Autonoma() {
                 return (
                   <div className="card" style={{ marginBottom: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                      <span className="sub">{total ? `${feitos}/${total} etapas · ${pct}%` : "orquestração"}</span>
+                      <span className="sub">{total ? `Etapas da iniciativa concluídas: ${feitos}/${total} · ${pct}%` : "orquestração"}</span>
                       <div style={{ display: "flex", gap: 6 }}>
                         {run.status === "em_andamento" && <button className="btn" onClick={() => cancelarRun.mutate(run.id)}>🛑 Cancelar</button>}
                         {(run.status === "cancelada" || run.status === "rejeitada") && <button className="btn primary" onClick={() => retomarRun.mutate(run.id)}>▶ Tentar novamente</button>}
@@ -205,7 +205,7 @@ export default function Autonoma() {
                     <div style={{ height: 8, borderRadius: 5, background: "rgba(127,127,127,.2)", overflow: "hidden" }}>
                       <div style={{ width: `${pct}%`, height: "100%", background: run.status === "concluida" ? "#16a34a" : "var(--accent, #2563eb)", transition: "width .4s" }} />
                     </div>
-                    {run.status === "em_andamento" && <p className="sub" style={{ margin: "8px 0 0" }}>⏳ {run.progresso ?? "Conduzindo as etapas…"}</p>}
+                    {run.status === "em_andamento" && <p className="sub" style={{ margin: "8px 0 0" }}>⏳ {run.progresso ?? "Conduzindo as etapas…"} <span style={{ opacity: 0.7 }}>· a barra avança a cada etapa concluída; a fase atual (produzir/Master/revisar) aparece aqui em tempo real</span></p>}
                     {run.status === "concluida" && <p className="sub" style={{ margin: "8px 0 0" }}>✅ Concluída — documentos em Documentação.</p>}
                     {run.status === "cancelada" && <p className="sub" style={{ margin: "8px 0 0" }}>🛑 Cancelada. Você pode tentar novamente do ponto em que parou.</p>}
                     {run.status === "rejeitada" && <p className="sub" style={{ margin: "8px 0 0" }}>⚠️ {run.progresso ?? "Falhou."} Você pode tentar novamente.</p>}
