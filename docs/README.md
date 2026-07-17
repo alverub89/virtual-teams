@@ -30,6 +30,7 @@ diagramas em **Mermaid**; decisões como **ADR**.
 | `adr/` | Decisões de arquitetura, uma por arquivo (ADR-001…012) | Arquitetos, segurança | Entrega 1 · N1 |
 | `funcionalidades/<x>/funcional.md` | Doc funcional: propósito, usuários, fluxos, regras, critérios de aceite | PM, negócio, QA | por fase |
 | `funcionalidades/<x>/tecnico.md` | Doc técnico: arquitetura da funcionalidade, contratos, modelo Mongo, integrações, segurança/observabilidade, ADRs | Dev, tech lead | por fase |
+| `funcionalidades/<x>/sdd/` | **SDDs — specs executáveis por história, prontas para implementação** (template do projeto + repo/arquivo alvo + prompt pronto) | Dev, agente de implementação | por fase |
 | `spec/` | Especificação técnica do sistema **atual** (origem) — referência de leitura | Todos | referência |
 | `prototipo/` | Protótipo navegável do sistema atual (referência de UX) | Design, PM | referência |
 | `plano-de-implementacao.md` | Plano de implementação do sistema **atual** (origem) — referência histórica | Todos | referência |
@@ -43,8 +44,8 @@ entregue, ADRs fechadas, observabilidade descrita).
 
 | Funcionalidade | Pasta | Fase de entrega | Nível atual |
 |---|---|---|---|
-| Autenticação, sessão & multi-tenant | `funcionalidades/autenticacao-multi-tenant/` | Fase 1 | **N1** |
-| Iniciativas & jornada com agente (streaming) | `funcionalidades/iniciativas-jornada/` | Fase 1 | **N1** |
+| Autenticação, sessão & multi-tenant | `funcionalidades/autenticacao-multi-tenant/` (+ `sdd/` 001–004) | Fase 1 | **N1** |
+| Iniciativas & jornada com agente (streaming) | `funcionalidades/iniciativas-jornada/` (+ `sdd/` 001–005) | Fase 1 | **N1** |
 | OKRs & indicadores de gestão | _(a criar antes da Fase 2)_ | Fase 2 | N0 |
 | Capacidades & repositórios + KB | _(a criar antes da Fase 3)_ | Fase 3 | N0 |
 | Histórias & documentação/SDD | _(a criar antes da Fase 4)_ | Fase 4 | N0 |
@@ -55,6 +56,18 @@ entregue, ADRs fechadas, observabilidade descrita).
 > As funcionalidades ainda em N0 estão descritas no inventário da
 > `descoberta-fase-0.md` (§2). Cada uma ganha seu par funcional+técnico em N1 **antes**
 > de sua fase entrar em execução, e sobe a N2 ao final da fase.
+
+### Camada de SDDs (spec-first → implementação)
+
+Quando uma funcionalidade chega a **N1**, ela ganha uma pasta `sdd/` com **specs
+executáveis por história** — a ponte spec-first para o código. Cada SDD segue o
+template do projeto (Contexto · Escopo · Especificação técnica: componentes/arquivos,
+contratos, dados · Plano de testes · Tarefas · Definition of Done) e traz **repo e
+arquivo(s) alvo** e um **prompt pronto**, de modo que um dev ou um agente de
+implementação consegue executá-la direto. Os SDDs da Fase 1 já estão escritos:
+
+- `funcionalidades/autenticacao-multi-tenant/sdd/` — SDD-001 a 004.
+- `funcionalidades/iniciativas-jornada/sdd/` — SDD-001 a 005.
 
 ## Índice de ADRs
 
